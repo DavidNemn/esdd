@@ -7,6 +7,7 @@
                 "/opt/ros/melodic/include",
                 "/usr/include/pcl-1.8",
                 "/usr/include/eigen3",
+                " /home/stancy/workspace/evio_workspace/evo_writebymyself_ws/** "
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",

@@ -4,5 +4,14 @@
 			"path": "."
 		}
 	],
-	"settings": {}
+	"settings": {
+		"python.autoComplete.extraPaths": [
+			"/home/stancy/workspace/evio_workspace/evo_writebymyself_ws/devel/lib/python2.7/dist-packages",
+			"/opt/ros/melodic/lib/python2.7/dist-packages"
+		],
+		"python.analysis.extraPaths": [
+			"/home/stancy/workspace/evio_workspace/evo_writebymyself_ws/devel/lib/python2.7/dist-packages",
+			"/opt/ros/melodic/lib/python2.7/dist-packages"
+		]
+	}
 }
