@@ -15,7 +15,6 @@ ADD_DEFINITIONS(
 set(HEADERS
   include/dvs_depth_from_defocus/depth_defocus_node.hpp
   include/dvs_depth_from_defocus/depth_vector.hpp
-  include/dvs_depth_from_defocus/dvs_mapping_nodelet.h
 )
 set(SOURCES
   src/depth_defocus_node.cpp

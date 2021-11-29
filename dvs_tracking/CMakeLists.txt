@@ -35,19 +35,17 @@ ENDIF()
 SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3 -fsee -fomit-frame-pointer -fno-signed-zeros -fno-math-errno -funroll-loops")
 
 set(HEADERS
-  include/dvs_tracking/dvs_tracking_nodelet.h
-
   include/dvs_tracking/lk_se3.hpp
   include/dvs_tracking/tracker.hpp
   include/dvs_tracking/weight_functions.hpp
 )
-
 set(SOURCES
   src/lk_se3.cpp
   src/tracker.cpp
 )
-
+# 把HEADERS、SOURCES添加到dvs_tracking库
 cs_add_library(${PROJECT_NAME} ${SOURCES} ${HEADERS})
+# 编译出可执行的dvs_tracking_ros
 cs_add_executable(dvs_tracking_ros src/dvs_tracking_ros.cpp)
 target_link_libraries(dvs_tracking_ros ${PROJECT_NAME}
   ${OpenCV_LIBS}

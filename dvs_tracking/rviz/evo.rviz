@@ -223,7 +223,7 @@ Visualization Manager:
   Global Options:
     Background Color: 238; 238; 236
     Default Light: true
-    Fixed Frame: dvs_evo
+    Fixed Frame: world
     Frame Rate: 30
   Name: root
   Tools:
@@ -247,16 +247,16 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 3.1638827323913574
+      Distance: 3.844867706298828
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.22630995512008667
-        Y: -0.21174035966396332
-        Z: 0.393597275018692
+        X: -0.03357861936092377
+        Y: -0.08175450563430786
+        Z: 0.3935239911079407
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
@@ -265,7 +265,7 @@ Visualization Manager:
       Pitch: -1.5697963237762451
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.503603458404541
+      Yaw: 4.938595294952393
     Saved: ~
 Window Geometry:
   Displays:
