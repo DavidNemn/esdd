@@ -12,8 +12,6 @@ ADD_DEFINITIONS(
     -Wfatal-errors
 )
 
-################################################################################
-
 set(HEADERS
   include/dvs_depth_from_defocus/depth_defocus_node.hpp
   include/dvs_depth_from_defocus/depth_vector.hpp
@@ -26,9 +24,6 @@ set(SOURCES
 
 cs_add_library(${PROJECT_NAME} ${SOURCES} ${HEADERS})
 
-# Executables
-################################################################################
-
 cs_add_executable(dvs_mapping_ros src/dvs_mapping_ros.cpp)
 target_link_libraries(dvs_mapping_ros ${PROJECT_NAME})
 
@@ -36,16 +31,6 @@ target_link_libraries(dvs_mapping_ros ${PROJECT_NAME})
 cs_add_library(dvs_mapping_nodelet src/dvs_mapping_nodelet.cpp)
 target_link_libraries(dvs_mapping_nodelet ${PROJECT_NAME})
 
-################################################################################
-# Tests
-
-catkin_add_gtest(${PROJECT_NAME}_tests
-  test/test_median_filter
-  test/test_depth_vector
-)
-target_link_libraries(${PROJECT_NAME}_tests ${PROJECT_NAME})
-
-################################################################################
 cs_install()
 cs_export()
 
