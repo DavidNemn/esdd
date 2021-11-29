@@ -33,8 +33,4 @@
   <depend>dvs_ros_driver</depend>
   <depend>davis_ros_driver</depend>
 
-  <export>
-    <nodelet plugin="${prefix}/dvs_tracking_nodelet.xml"/>
-  </export>
-
   </package>

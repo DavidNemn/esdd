@@ -13,10 +13,6 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 find_package(PCL 1.7 REQUIRED)
 include_directories(${PCL_INCLUDE_DIRS})
 
-
-
-
-
 SET(CMAKE_BUILD_TYPE RelWithDebInfo) # Release, RelWithDebInfo)
 ADD_DEFINITIONS(
     -Wno-ignored-qualifiers
@@ -38,7 +34,6 @@ ENDIF()
 
 SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3 -fsee -fomit-frame-pointer -fno-signed-zeros -fno-math-errno -funroll-loops")
 
-################################################################################
 set(HEADERS
   include/dvs_tracking/dvs_tracking_nodelet.h
 
@@ -53,21 +48,11 @@ set(SOURCES
 )
 
 cs_add_library(${PROJECT_NAME} ${SOURCES} ${HEADERS})
-
-# Nodes
-################################################################################
-
 cs_add_executable(dvs_tracking_ros src/dvs_tracking_ros.cpp)
 target_link_libraries(dvs_tracking_ros ${PROJECT_NAME}
   ${OpenCV_LIBS}
   ${PCL_LIBRARIES}
 )
 
-cs_add_library(dvs_tracking_nodelet src/dvs_tracking_nodelet.cpp)
-target_link_libraries(dvs_tracking_nodelet ${PROJECT_NAME})
-
-
-
-################################################################################
 cs_install()
 cs_export()

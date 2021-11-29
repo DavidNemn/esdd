@@ -29,8 +29,4 @@
   <depend>vikit_py</depend>
   <depend>evo_utils</depend>
 
-  <export>
-    <nodelet plugin="${prefix}/dvs_mapping_nodelet.xml"/>
-  </export>
-
   </package>
