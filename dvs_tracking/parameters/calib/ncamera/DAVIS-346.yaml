@@ -1,0 +1,48 @@
+cameras:
+  - camera:
+      distortion:
+        parameters:
+          cols: 1
+          rows: 4
+          data: [0.0, 0.0, 0.0, 0.0] #[-0.3687369041657594, 0.1635331561185621, 0.0006758841262625439, -0.0014358423311193668, 0.0]
+        type: radial-tangential
+      image_height: 260
+      image_width: 346
+      intrinsics:
+        cols: 1
+        rows: 4
+        data:
+          [
+            297.921281,
+            297.917269,
+            164.777121,
+            119.524782,
+          ]
+      label: cam0
+      line-delay-nanoseconds: 0
+      type: pinhole
+    T_B_C:
+      cols: 4
+      rows: 4
+      data:
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0,
+        ]
+    serial_no: DAVIS-346
+    calib_date: 21/05/2021
+label: DAVIS-346

@@ -1,0 +1,20 @@
+image_width: 240
+image_height: 180
+camera_name: DAVIS-rpg
+camera_matrix:
+  rows: 3
+  cols: 3
+  data: [196.639, 0, 105.064, 0, 196.733, 72.4717, 0.0, 0.0, 1.0]
+distortion_model: plumb_bob
+distortion_coefficients:
+  rows: 1
+  cols: 5
+  data: [-0.336733, 0.111789, -0.00140053, -0.000459594, 0.0]
+rectification_matrix:
+  rows: 3
+  cols: 3
+  data: [0.999791, -0.018779, -0.00802416, 0.0187767, 0.999824, -0.000360707, 0.00802952, 0.000209964, 0.999968]
+projection_matrix:
+  rows: 3
+  cols: 4
+  data: [156.925, 0, 108.167, 0, 0, 156.925, 78.4205, 0, 0, 0, 1, 0]

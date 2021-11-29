@@ -1,0 +1,119 @@
+<launch>
+    <arg name="auto_trigger" default="true"/>
+
+    <arg name="camera_name" default="DAVIS-346" />
+    <arg name="bootstrap_image_topic" default="/dvs/image_raw" />
+    <arg name="events_topic" default="/dvs/events" />
+
+    <param name="camera_name" value="$(arg camera_name)" />
+    <param name="calib_file" value="$(find dvs_tracking)/parameters/calib/$(arg camera_name).yaml" />
+
+    <remap from="events" to="$(arg events_topic)" />
+    <remap from="camera_info" to="/dvs/camera_info" />
+    <remap from="remote_key" to="/evo/remote_key" />
+
+    <param name="world_frame_id" value="/world"/>
+    <param name="dvs_bootstrap_frame_id" value="/camera_0" />
+    <param name="dvs_frame_id" value="/dvs_evo" />
+
+    <param name="min_depth" value="0.2" />
+    <param name="max_depth" value="1" />
+    <param name="num_depth_cells" value="50" />
+
+    <param name="fov_virtual_camera_deg" value="80.0" />
+    <param name="virtual_width" value="346" />
+    <param name="virtual_height" value="260" />
+
+    <!-- Mapping 基于DSI的半稠密建图-->
+    <node name="dvs_mapping" pkg="dvs_mapping" type="dvs_mapping_ros" output="screen">
+        <param name="adaptive_threshold_kernel_size" value="5" />
+        <param name="adaptive_threshold_c" value="7" />
+        <param name="voxel_filter_leaf_size" value="0.01" />
+        <param name="type_focus_measure" value="0" />
+        <param name="half_patchsize" value="3" />
+        <param name="median_filter_size" value="15" />
+        <param name="skip_batches" value="0" />
+        <param name="frame_size" value="2048" />
+
+        <param name="radius_search" value="0.2" />
+        <param name="min_num_neighbors" value="2" />
+        <param name="min_batch_size" value="20000" />
+        <param name="min_num_neighbors_global_map" value="2"/>
+        <param name="radius_search_global_map" value=".05"/>
+
+        <param name="events_to_recreate_kf" value="200000" />       <!-- 创建关键帧的事件数 -->
+        <param name="accumulate_local_map_once_every" value="25"/>  <!-- 创建全局地图的累积帧数 -->
+        <param name="global_point_cloud_skip_first" value="15"/>    <!-- 创建全局地图跳过的帧数 -->
+        
+        <param name="auto_trigger" value="$(arg auto_trigger)"/>
+    </node>
+
+    <!-- Map expansion 出现某些条件时更新地图-->
+    <node name="trigger_map_expansion" pkg="dvs_mapping" type="trigger_map_expansion.py" output="screen" >
+        <remap from="remote_key" to="evo/remote_key" />
+        <remap from="pointcloud" to="dvs_mapping/pointcloud" />
+
+        <param name="visibility_threshold" value="0.9" />
+        <param name="coverage_threshold" value="0.4" />
+        <param name="baseline_threshold" value="0.1" />
+
+        <param name="rate" value="5" />
+        <param name="number_of_initial_maps_to_skip" value="0"/>
+    </node>
+
+    <!-- Tracking 基于光流法的位姿估计-->
+    <node name="dvs_tracking" pkg="dvs_tracking" type="dvs_tracking_ros" required="true" output="screen">
+        <param name="discard_events_when_idle" value="true"/>
+        <param name="weight_scale_translation" value="0" />
+        <param name="weight_scale_rotation" value="0" />
+        <param name="weight_scale" value="1." />
+        <param name="map_blur" value="3" />
+        <param name="pose_mean_filter_size" value="5" />
+        <param name="batch_size" value="1000" />                 <!-- 同时处理的关键点数目 500 -->
+        <param name="max_iterations" value="100" />             <!-- 最大迭代次数 -->
+        <param name="pyramid_levels" value="3" />               <!-- coarse to fine金字塔层数 2 -->
+        <param name="noise_rate" value="10000" />               <!-- 噪声频率, 如果事件频率低于噪声频率就不累积 -->
+        <param name="max_event_rate" value="4000000" />         <!-- 最大事件频率, 如果事件频率超过噪声频率就不累积 -->
+
+        <param name="frame_size" value="7500" />                <!-- 累积的事件个数 -->
+        <param name="step_size" value="15000" />                <!-- 下次累积事件的起始步长 -->
+        <param name="events_per_kf" value="100000" />           <!-- 每events_per_kf个事件构建一个参考帧 -->
+        <param name="min_map_size" value="200"/>                <!-- map的最小容量 -->
+        <param name="min_n_keypoints" value="1000"/>            <!-- 关键点的最小个数 -->
+
+        <param name="event_map_overlap_rate" value="15" />
+        <param name="auto_trigger" value="$(arg auto_trigger)"/>
+        <remap from="pointcloud" to="dvs_mapping/pointcloud" />
+    </node>
+    
+    <!-- bootstrapping 将事件累积并发布-->
+    <node name="dvs_bootstrapping" pkg="dvs_bootstrapping" type="dvs_bootstrapping_ef_ros" output="screen">
+        <param name="rate_hz" value="30" />
+        
+        <param name="frame_size" value="20000" />
+        <param name="local_frame_size" value="7500"/>
+        <param name="min_step_size" value="15000"/>
+        <param name="events_scale_factor" value="4.0" />
+        <param name="motion_corrected_topic" value="/events/image_raw"/>
+        <param name="enable_visualizations" value="true"/>
+
+        <param name="auto_trigger" value="true"/>
+    </node>
+
+    <!-- VINS-mono辅助初始化 -->
+    <!-- Publish VINS pose to tf frame "dvs_bootstrap_frame_id" -->
+    <node name="pose_to_tf" pkg="dvs_bootstrapping" type="pose_to_tf.py" output="screen">
+        <param name="source_topic_name" value="/vins_estimator/camera_pose" />
+        <param name="relative_to_first_pose" value="false" />
+    </node>
+
+    <node name="snakify" pkg="evo_utils" type="snakify.py" output="screen" >
+      <param name="length" value="100000" />
+    </node>
+
+    <node type="rviz" name="rviz" pkg="rviz" args="-d $(find dvs_tracking)/rviz/evo.rviz" />
+    
+</launch>
+
+
+

@@ -1,0 +1,52 @@
+image_width: 346
+image_height: 260
+camera_name: DAVIS-346
+camera_matrix:
+  rows: 3
+  cols: 3
+  data:
+    [
+      297.921281,
+      0.0,
+      164.777121,
+      0.0,
+      297.917269,
+      119.524782,
+      0.0,
+      0.0,
+      1.0,
+    ]
+distortion_model: plumb_bob
+distortion_coefficients:
+  rows: 1
+  cols: 5
+  data:
+    [
+      -0.374508,
+      0.163461,
+      -0.000088,
+      -0.000349,
+      0.0,
+    ]
+rectification_matrix:
+  rows: 3
+  cols: 3
+  data: [1, 0, 0, 0, 1, 0, 0, 0, 1]
+projection_matrix:
+  rows: 3
+  cols: 4
+  data:
+    [
+      297.921281,
+      0.0,
+      164.777121,
+      0.0,
+      0.0,
+      297.917269,
+      119.524782,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+    ]
