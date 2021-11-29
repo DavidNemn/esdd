@@ -20,8 +20,6 @@ ADD_DEFINITIONS(
     -w
 )
 
-################################################################################
-
 set(HEADERS_ef
     include/dvs_bootstrapping/Bootstrapper.hpp
     include/dvs_bootstrapping/EventsFramesBootstrapper.hpp
@@ -32,11 +30,9 @@ set(SOURCES_ef
     src/EventsFramesBootstrapper.cpp
     src/motion_correction.cpp
 )
-
+# 把HEADERS_ef、SOURCES_ef添加到dvs_bootstrapping_ef库
 cs_add_library(${PROJECT_NAME}_ef ${SOURCES_ef} ${HEADERS_ef})
-
-################################################################################
-
+# 编译出可执行的dvs_bootstrapping_ef_ros
 cs_add_executable(dvs_bootstrapping_ef_ros src/dvs_bootstrapping_ef_ros.cpp)
 target_link_libraries(dvs_bootstrapping_ef_ros 
   ${PROJECT_NAME}_ef
@@ -44,6 +40,5 @@ target_link_libraries(dvs_bootstrapping_ef_ros
   ${Boost_INCLUDE_DIRS}
 )
 
-################################################################################
 cs_install()
 cs_export()
