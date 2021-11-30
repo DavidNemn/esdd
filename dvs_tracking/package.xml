@@ -27,7 +27,7 @@
   <depend>dvs_slam_msgs</depend>
   <depend>evo_utils</depend>
   <depend>dvs_mapping</depend>
-  <depend>dvs_bootstrapping</depend>
+  <!-- <depend>dvs_bootstrapping</depend> -->
   <depend>dvs_renderer</depend>
   <depend>vikit_py</depend>
   <depend>dvs_ros_driver</depend>
