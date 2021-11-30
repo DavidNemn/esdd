@@ -378,7 +378,7 @@ void Tracker::publishTF()
     // 注意时间戳, 累积了frame_size_的事件图像时间戳就是事件的时间戳
     tf::StampedTransform new_pose(pose_tf, events_[cur_ev_ + frame_size_].ts, world_frame_id_, "dvs_evo_raw");
     poses_.push_back(new_pose);
-    tf_pub_.sendTransform(new_pose);
+    // tf_pub_.sendTransform(new_pose);
 
     tf::StampedTransform filtered_pose;
     if (getFilteredPose(filtered_pose))
