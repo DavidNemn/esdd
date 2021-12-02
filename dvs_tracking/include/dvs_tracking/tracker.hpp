@@ -6,6 +6,11 @@
 #include <image_transport/image_transport.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <std_msgs/String.h>
+
+#include <sensor_msgs/Imu.h>
+#include <message_filters/cache.h>
+#include <message_filters/subscriber.h>
+
 #include <tf/tf.h>
 #include <tf/transform_broadcaster.h>
 
@@ -64,12 +69,18 @@ private:
     bool getFilteredPose(tf::StampedTransform &pose); // 位姿滤波
     void updateMap();                                 // 更新关键帧处的地图
 
-    void publishMapOverlapThread();            // 发布地图覆盖图像
-    void publishTF();                          // 发布坐标变换
-    void publishPose();                        // 发布当前位姿
-    // void publishImg();                         // 发布事件累积图像
-    // image_transport::Publisher kf_image_pub_;  // 发布关键帧
-    // image_transport::Publisher new_image_pub_; // 发布当前帧
+    void publishMapOverlapThread(); // 发布地图覆盖图像
+    void publishTF();               // 发布坐标变换
+    void publishPose();             // 发布当前位姿
+
+    //--------------------------------------------------------------------------------------
+    Eigen::Matrix<float, 6, 6> Cov_noise_;
+    void imuCb(const sensor_msgs::Imu::ConstPtr &msg);
+    message_filters::Subscriber<sensor_msgs::Imu> imu_sub_;
+    std::unique_ptr<message_filters::Cache<sensor_msgs::Imu>> imu_cache_; // imu缓存, 直接把msg导入!
+    std::tuple<Eigen::Matrix3f, Eigen::Vector3f, Eigen::Vector3f, float, Eigen::Matrix<float, 9, 9>>
+    imuIntegrate(std::vector<sensor_msgs::Imu::ConstPtr> &imu_vector) const;
+    //--------------------------------------------------------------------------------------
 
     void clearEventQueue();  // 清空事件队列
     void postCameraLoaded(); // 加载相机参数
