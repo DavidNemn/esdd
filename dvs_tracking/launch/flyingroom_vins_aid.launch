@@ -84,25 +84,8 @@
         <param name="event_map_overlap_rate" value="15" />
         <param name="auto_trigger" value="$(arg auto_trigger)"/>
         <remap from="pointcloud" to="dvs_mapping/pointcloud" />
+        <remap from="imu_topic" to="dvs/imu" />
     </node>
-    
-    <!-- bootstrapping 将事件累积并发布-->
-    <!-- <node name="dvs_bootstrapping" pkg="dvs_bootstrapping" type="dvs_bootstrapping_ef_ros" output="screen">
-        <param name="rate_hz" value="30" />
-        
-        <param name="frame_size" value="20000" />
-        <param name="local_frame_size" value="7500"/>
-        <param name="min_step_size" value="15000"/>
-        <param name="events_scale_factor" value="4.0" />
-        <param name="motion_corrected_topic" value="/events/image_raw"/>
-        <param name="enable_visualizations" value="true"/>
-
-        <param name="auto_trigger" value="true"/>
-    </node> -->
-
-    <!-- VINS-mono辅助初始化 -->
-    <!-- Publish VINS pose to tf frame "dvs_bootstrap_frame_id" -->
-
     
     <node name="pose_to_tf" pkg="dvs_mapping" type="pose_to_tf.py" output="screen">
         <param name="source_topic_name" value="/vins_estimator/camera_pose" />
