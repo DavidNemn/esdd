@@ -32,8 +32,8 @@ public:
 
         Keypoint(Eigen::Vector3f _P, float _pixel_value, Vector6 _J, Matrix6 _JJt)
             : P(_P), pixel_value(_pixel_value), J(_J), JJt(_JJt) {}
-        // Keypoint(Eigen::Vector3f _P, float _pixel_value)
-        //     : P(_P), pixel_value(_pixel_value) {}
+        Keypoint(Eigen::Vector3f _P, float _pixel_value)
+            : P(_P), pixel_value(_pixel_value) {}
     }; // 定义处理的关键点
 
     typedef pcl::PointXYZ Point;
@@ -59,7 +59,7 @@ protected:
     PointCloud::Ptr map_;       // 基于关键帧构建的地图
     PointCloud::Ptr map_local_; // 在当前帧可视的局部地图
 
-    // TODO : 使用fca求kf_img_到new_img_的雅克比矩阵
+    Eigen::MatrixXf J_cam; // 雅克比
 
     cv::Mat depth_kf_;              // 关键帧的深度图
     cv::Mat kf_img_;                // 关键帧
