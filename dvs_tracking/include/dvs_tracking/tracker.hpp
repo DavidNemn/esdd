@@ -84,6 +84,9 @@ private:
 
     void clearEventQueue();  // 清空事件队列
     void postCameraLoaded(); // 加载相机参数
+
+    void importImuMeas(const Eigen::Matrix3f &R_meas, const Eigen::Vector3f &v_meas, const Eigen::Vector3f &p_meas, const float t_meas, const Eigen::Matrix<float, 9, 9> &Cov_meas);
+
 };
 
 #endif // TRACKER_H

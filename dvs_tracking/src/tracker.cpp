@@ -46,7 +46,7 @@ Tracker::Tracker(ros::NodeHandle &nh, ros::NodeHandle nh_private)
     weight_scale_trans_ = rpg_common_ros::param<float>(nhp_, "weight_scale_translation", 0.);
     weight_scale_rot_ = rpg_common_ros::param<float>(nhp_, "weight_scale_rotation", 0.);
 
-    T_ = T_curr_ = T_kf_ = T_wb_ = Eigen::Isometry3f::Identity();
+    T_ = T_curr_inv_ = T_kf_ = T_wb_ = Eigen::Isometry3f::Identity();
     b_w_ << 0, 0, 0;
     b_a_ << 0, 0, 0;
     g_ << 0, 0, -9.8;
@@ -206,8 +206,8 @@ Tracker::imuIntegrate(std::vector<sensor_msgs::Imu::ConstPtr> &imu_vector) const
         a(1) = imu_vector[i]->linear_acceleration.y;
         a(2) = imu_vector[i]->linear_acceleration.z;
         // 去除偏差(预设值,不参与更新)
-        // w = w - vo_->getImuBiasGyro();
-        // a = a - vo_->getImuBiasAccel();
+        w = w - b_w_;
+        a = a - b_a_;
         // 获取δt
         float delta_t = (imu_vector[i + 1]->header.stamp - imu_vector[i]->header.stamp).toSec();
         // 更新传递矩阵
@@ -244,7 +244,7 @@ void Tracker::initialize(const ros::Time &ts)
 
     T_ = T_kf_world.cast<float>().inverse();
     T_kf_ = T_;
-    T_curr_ = Eigen::Isometry3f::Identity();
+    T_curr_inv_ = Eigen::Isometry3f::Identity();
     T_wb_ = T_bc_ * T_ * T_bc_inv_;
 
     while (cur_ev_ + 1 < events_.size() && events_[cur_ev_].ts < TF_kf_world.stamp_)
@@ -265,8 +265,8 @@ void Tracker::updateMap()
         return;
     }
 
-    T_kf_ = T_kf_ * T_curr_;
-    T_curr_ = Eigen::Isometry3f::Identity();
+    T_kf_ = T_kf_ * T_curr_inv_;
+    T_curr_inv_ = Eigen::Isometry3f::Identity();
     kf_ev_ = cur_ev_;
 
     projectMap(); // 投影点云得到关键帧的关键点和雅克比(FCA)
@@ -335,7 +335,7 @@ void Tracker::estimateTrajectory()
         Eigen::Matrix<float, 9, 9> Cov_meas;
         std::tie(R_meas, v_meas, p_meas, t_meas, Cov_meas) = imuIntegrate(imu_vector);
         // 导入两帧之间imu的更新量
-        // vo_->importImuMeas(R_meas, v_meas, p_meas, t_meas, Cov_meas);
+        importImuMeas(R_meas, v_meas, p_meas, t_meas, Cov_meas);
 
         drawEvents(events_.begin() + cur_ev_, events_.begin() + frame_end, new_img_); // 把frame_size_个事件累积到new_img_
         cv::buildPyramid(new_img_, pyr_new_, pyramid_levels_);                        // 构建图像金字塔
@@ -344,6 +344,15 @@ void Tracker::estimateTrajectory()
         publishTF();           // 发布tf
         cur_ev_ += step_size_; // 跳过step_size_个事件
     }
+}
+
+void Tracker::importImuMeas(const Eigen::Matrix3f &R_meas, const Eigen::Vector3f &v_meas, const Eigen::Vector3f &p_meas, const float t_meas, const Eigen::Matrix<float, 9, 9> &Cov_meas)
+{
+    R_meas_ = R_meas;
+    v_meas_ = v_meas;
+    p_meas_ = p_meas;
+    t_meas_ = t_meas;
+    Cov_meas_ = Cov_meas;
 }
 
 void Tracker::tfCallback(const tf::tfMessagePtr &msgs)
