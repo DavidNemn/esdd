@@ -69,7 +69,6 @@ Tracker::Tracker(ros::NodeHandle &nh, ros::NodeHandle nh_private)
     map_sub_ = nh_.subscribe("pointcloud", 0, &Tracker::mapCallback, this);
     tf_sub_ = nh_.subscribe("tf", 0, &Tracker::tfCallback, this);
     poses_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("evo/pose", 0);
-    // new_image_pub_ = it_.advertise("new_image", 1);
 #ifdef TRACKER_DEBUG_REFERENCE_IMAGE
     std::thread map_overlap(&Tracker::publishMapOverlapThread, this);
     map_overlap.detach();
@@ -173,7 +172,7 @@ void Tracker::initialize(const ros::Time &ts)
 
     T_ = T_kf_world.cast<float>().inverse();
     T_kf_ = T_;
-    T_curr_ = Eigen::Isometry3f::Identity();
+    T_curr_inv_ = Eigen::Isometry3f::Identity();
     T_wb_ = T_bc_ * T_ * T_bc_inv_;
 
     while (cur_ev_ + 1 < events_.size() && events_[cur_ev_].ts < TF_kf_world.stamp_)
@@ -194,8 +193,8 @@ void Tracker::updateMap()
         return;
     }
 
-    T_kf_ = T_kf_ * T_curr_;
-    T_curr_ = Eigen::Isometry3f::Identity();
+    T_kf_ = T_kf_ * T_curr_inv_;
+    T_curr_inv_ = Eigen::Isometry3f::Identity();
     kf_ev_ = cur_ev_;
 
     projectMap(); // 投影点云得到关键帧的关键点和雅克比(FCA)
@@ -241,8 +240,6 @@ void Tracker::estimateTrajectory()
 
         size_t frame_end = cur_ev_ + frame_size_;
 
-        // TODO: 在cur_ev_和frame_end之间进行imu的累积
-
         double frameduration = (events_[frame_end].ts - events_[cur_ev_].ts).toSec(); // 累积事件的时间戳范围
         event_rate_ = std::round(static_cast<double>(frame_size_) / frameduration);   // 累积事件频率
         if (event_rate_ < noise_rate_)
@@ -259,8 +256,6 @@ void Tracker::estimateTrajectory()
         }
 
         drawEvents(events_.begin() + cur_ev_, events_.begin() + frame_end, new_img_); // 把frame_size_个事件累积到new_img_
-        // publishImg();
-        cv::buildPyramid(new_img_, pyr_new_, pyramid_levels_); // 构建图像金字塔
         trackFrame();                                          // 进行tracking
 
         publishTF();           // 发布tf

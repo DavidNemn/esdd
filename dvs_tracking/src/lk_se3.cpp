@@ -180,7 +180,7 @@ void LKSE3::updateTransformation(size_t pyr_lvl)
     //         {
     //             const Keypoint &k = keypoints_[i];
     //             // 关键帧像素位置投影到当前帧
-    //             Eigen::Vector3f p = T_curr_inv_ * k.P;
+    //             Eigen::Vector3f p = T_curr_ * k.P;
     //             float u = p[0] / p[2] * fx + cx,
     //                   v = p[1] / p[2] * fy + cy;
     //             // 当前帧与投影融合得到新像素
@@ -204,7 +204,7 @@ void LKSE3::updateTransformation(size_t pyr_lvl)
     //         for (int par = 0; par < 6; par++)
     //             H(par, par) = H(par, par) * mult;
     //         dx = H.ldlt().solve(b * scale); // 核心位姿更新公式, Cholesky分解
-    //         T_temp = T_curr_inv_ * SE3::exp(dx).matrix();
+    //         T_temp = T_curr_ * SE3::exp(dx).matrix();
     //         H = Matrix6::Zero();
     //         b = Vector6::Zero();
     //         for (auto i = 0; i != keypoints_.size(); ++i)
@@ -239,7 +239,7 @@ void LKSE3::updateTransformation(size_t pyr_lvl)
     //         lmit++;
     //     }
 
-    //     T_curr_inv_ = T_temp;
+    //     T_curr_ = T_temp;
     //     x_ += dx;
     //     if (lambda > 1e-8)
     //         lambda *= (1 / down);
@@ -270,7 +270,7 @@ void LKSE3::updateTransformation(size_t pyr_lvl)
     //         {
     //             const Keypoint &k = keypoints_[i];
     //             // 关键帧像素位置投影到当前帧
-    //             Eigen::Vector3f p = T_curr_inv_ * k.P;
+    //             Eigen::Vector3f p = T_curr_ * k.P;
     //             float u = p[0] / p[2] * fx + cx,
     //                   v = p[1] / p[2] * fy + cy;
     //             // 当前帧与投影融合得到新像素
@@ -291,7 +291,7 @@ void LKSE3::updateTransformation(size_t pyr_lvl)
     //         LOG(WARNING) << "Matrix close to singular!";
     //         return;
     //     }
-    //     T_curr_inv_ *= SE3::exp(dx).matrix();
+    //     T_curr_ *= SE3::exp(dx).matrix();
     //     x_ += dx;
     //     H = Matrix6::Zero();
     //     b = Vector6::Zero();
@@ -299,7 +299,7 @@ void LKSE3::updateTransformation(size_t pyr_lvl)
     //     {
     //         const Keypoint &k = keypoints_[i];
     //         // 关键帧像素位置投影到当前帧
-    //         Eigen::Vector3f p = T_curr_inv_ * k.P;
+    //         Eigen::Vector3f p = T_curr_ * k.P;
     //         float u = p[0] / p[2] * fx + cx,
     //               v = p[1] / p[2] * fy + cy;
     //         // 当前帧与投影融合得到新像素
@@ -341,7 +341,7 @@ void LKSE3::updateTransformation(size_t pyr_lvl)
         {
             const Keypoint &k = keypoints_[i];
             // 关键帧像素位置投影到当前帧
-            Eigen::Vector3f p = T_curr_inv_ * k.P;
+            Eigen::Vector3f p = T_curr_ * k.P;
             float u = p[0] / p[2] * fx + cx,
                   v = p[1] / p[2] * fy + cy;
             // 当前帧与投影融合得到新像素
@@ -360,21 +360,22 @@ void LKSE3::updateTransformation(size_t pyr_lvl)
             LOG(WARNING) << "Matrix close to singular!";
             return;
         }
-        T_curr_inv_ *= SE3::exp(dx).matrix();
+        T_curr_ *= SE3::exp(dx).matrix();
         x_ += dx;
     }
 }
 
 void LKSE3::trackFrame()
 {
-    T_curr_inv_ = T_curr_.inverse();
+    cv::buildPyramid(new_img_, pyr_new_, pyramid_levels_); // 构建图像金字塔
+    T_curr_ = T_curr_inv_.inverse();
     x_.setZero();
 
     for (size_t lvl = pyramid_levels_; lvl != 0; --lvl)
         updateTransformation(lvl - 1);
 
-    T_curr_ *= SE3::exp(-x_).matrix();
-    T_ = T_kf_ * T_curr_;
+    T_curr_inv_ *= SE3::exp(-x_).matrix();
+    T_ = T_kf_ * T_curr_inv_;
 }
 
 void LKSE3::drawEvents(EventQueue::iterator ev_first, EventQueue::iterator ev_last, cv::Mat &out)

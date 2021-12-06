@@ -80,14 +80,14 @@ protected:
     cv::Rect rect_; // 图像大小, width×height
 
     Eigen::Isometry3f T_;          // 当前帧->世界坐标系
-    Eigen::Isometry3f T_curr_;     // 当前帧->关键帧
-    Eigen::Isometry3f T_curr_inv_; // 关键帧->当前帧
+    Eigen::Isometry3f T_curr_;     // 关键帧->当前帧
+    Eigen::Isometry3f T_curr_inv_; // 当前帧->关键帧
     Eigen::Isometry3f T_kf_;       // 关键帧->世界坐标系
     Eigen::Isometry3f T_wb_;       // 机体系->世界坐标系
     Eigen::Isometry3f T_bc_;       // 相机系->机体系
     Eigen::Isometry3f T_bc_inv_;   // 机体系->相机系
 
-    Eigen::VectorXf x_ = Vector6::Zero(); // T_curr_inv_的李代数表示
+    Eigen::VectorXf x_ = Vector6::Zero(); // T_curr_的李代数表示
 
     void projectMap();                         // 投影3D点云到关键帧
     void precomputereferenceFrame();           // 计算关键帧的关键点
