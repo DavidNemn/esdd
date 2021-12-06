@@ -27,7 +27,6 @@
 #include <thread>
 
 #include "evo_utils/camera.hpp"
-#include "evo_utils/math.hpp"
 #include "evo_utils/main.hpp"
 #include "rpg_common_ros/params_helper.hpp"
 
@@ -46,7 +45,7 @@ Tracker::Tracker(ros::NodeHandle &nh, ros::NodeHandle nh_private)
     weight_scale_trans_ = rpg_common_ros::param<float>(nhp_, "weight_scale_translation", 0.);
     weight_scale_rot_ = rpg_common_ros::param<float>(nhp_, "weight_scale_rotation", 0.);
 
-    T_ = T_curr_inv_ = T_kf_ = T_wb_ = Eigen::Isometry3f::Identity();
+    T_ = T_curr_ = T_kf_ = T_wb_ = Eigen::Isometry3f::Identity();
     b_w_ << 0, 0, 0;
     b_a_ << 0, 0, 0;
     g_ << 0, 0, -9.8;
@@ -70,10 +69,7 @@ Tracker::Tracker(ros::NodeHandle &nh, ros::NodeHandle nh_private)
     map_sub_ = nh_.subscribe("pointcloud", 0, &Tracker::mapCallback, this);
     tf_sub_ = nh_.subscribe("tf", 0, &Tracker::tfCallback, this);
     poses_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("evo/pose", 0);
-
-    imu_sub_.subscribe(nh_, "imu_topic", 500, ros::TransportHints().tcpNoDelay());
-    imu_cache_.reset(new message_filters::Cache<sensor_msgs::Imu>(imu_sub_, 100));
-    imu_cache_->registerCallback(boost::bind(&Tracker::imuCb, this, _1));
+    // new_image_pub_ = it_.advertise("new_image", 1);
 #ifdef TRACKER_DEBUG_REFERENCE_IMAGE
     std::thread map_overlap(&Tracker::publishMapOverlapThread, this);
     map_overlap.detach();
@@ -165,73 +161,6 @@ void Tracker::mapCallback(const sensor_msgs::PointCloud2::ConstPtr &msg)
     }
 }
 
-void Tracker::imuCb(const sensor_msgs::Imu::ConstPtr &msg)
-{
-}
-
-std::tuple<Eigen::Matrix3f, Eigen::Vector3f, Eigen::Vector3f, float, Eigen::Matrix<float, 9, 9>>
-Tracker::imuIntegrate(std::vector<sensor_msgs::Imu::ConstPtr> &imu_vector) const
-{
-    // 一段时间里的imu观测
-    int num_measurement = imu_vector.size();
-    Eigen::Matrix3f R_meas;
-    Eigen::Vector3f v_meas;
-    Eigen::Vector3f p_meas;
-    float t_meas = 0;
-    R_meas << 1, 0, 0, 0, 1, 0, 0, 0, 1;
-    v_meas << 0, 0, 0;
-    p_meas << 0, 0, 0;
-    // 协方差
-    Eigen::Matrix<float, 9, 9> Cov_meas;
-    if (imu_vector.size() != 0)
-        Cov_meas.setZero();
-    else
-        Cov_meas.setIdentity();
-    // 误差传递矩阵
-    Eigen::Matrix<float, 9, 9> A;
-    A.setIdentity();
-    // 噪声传递矩阵
-    Eigen::Matrix<float, 9, 6> B;
-    B.setZero();
-    // 获取imu测量
-    for (int i = 0; i < num_measurement - 1; i++)
-    {
-        // 获取陀螺仪和加速度计测量值
-        Eigen::Vector3f w;
-        Eigen::Vector3f a;
-        w(0) = imu_vector[i]->angular_velocity.x;
-        w(1) = imu_vector[i]->angular_velocity.y;
-        w(2) = imu_vector[i]->angular_velocity.z;
-        a(0) = imu_vector[i]->linear_acceleration.x;
-        a(1) = imu_vector[i]->linear_acceleration.y;
-        a(2) = imu_vector[i]->linear_acceleration.z;
-        // 去除偏差(预设值,不参与更新)
-        w = w - b_w_;
-        a = a - b_a_;
-        // 获取δt
-        float delta_t = (imu_vector[i + 1]->header.stamp - imu_vector[i]->header.stamp).toSec();
-        // 更新传递矩阵
-        Eigen::Matrix<float, 3, 3> delta_R_jm1_j = evo_utils::math::exp_SO3<float>(w * delta_t);
-        Eigen::Matrix<float, 3, 3> a_hat = evo_utils::math::hat(a);
-        A.block<3, 3>(0, 0) = delta_R_jm1_j.transpose();
-        A.block<3, 3>(3, 0) = -R_meas * a_hat * delta_t;
-        A.block<3, 3>(6, 0) = -0.5 * R_meas * a_hat * delta_t * delta_t;
-        A.block<3, 3>(6, 3) = delta_t * Eigen::MatrixXf::Identity(3, 3);
-        B.block<3, 3>(0, 0) = evo_utils::math::exp_Jacobian<float>(w * delta_t) * delta_t;
-        B.block<3, 3>(3, 3) = R_meas * delta_t;
-        B.block<3, 3>(6, 3) = 0.5 * R_meas * delta_t * delta_t;
-        // 更新协方差矩阵
-        Cov_meas = A * Cov_meas * A.transpose() + B * Cov_noise_ * B.transpose();
-        // 更新状态量
-        t_meas += delta_t;
-        R_meas *= delta_R_jm1_j;
-        v_meas += R_meas * a * delta_t;
-        p_meas += v_meas * delta_t + 0.5 * R_meas * a * delta_t * delta_t;
-    }
-    // 返回C++元组
-    return std::make_tuple(R_meas, v_meas, p_meas, t_meas, Cov_meas);
-}
-
 void Tracker::initialize(const ros::Time &ts)
 {
     // 仅在第一次接收到map的时候使用，用于得到最先的位姿，发布后在mapping部分切换
@@ -244,7 +173,7 @@ void Tracker::initialize(const ros::Time &ts)
 
     T_ = T_kf_world.cast<float>().inverse();
     T_kf_ = T_;
-    T_curr_inv_ = Eigen::Isometry3f::Identity();
+    T_curr_ = Eigen::Isometry3f::Identity();
     T_wb_ = T_bc_ * T_ * T_bc_inv_;
 
     while (cur_ev_ + 1 < events_.size() && events_[cur_ev_].ts < TF_kf_world.stamp_)
@@ -265,8 +194,8 @@ void Tracker::updateMap()
         return;
     }
 
-    T_kf_ = T_kf_ * T_curr_inv_;
-    T_curr_inv_ = Eigen::Isometry3f::Identity();
+    T_kf_ = T_kf_ * T_curr_;
+    T_curr_ = Eigen::Isometry3f::Identity();
     kf_ev_ = cur_ev_;
 
     projectMap(); // 投影点云得到关键帧的关键点和雅克比(FCA)
@@ -312,6 +241,8 @@ void Tracker::estimateTrajectory()
 
         size_t frame_end = cur_ev_ + frame_size_;
 
+        // TODO: 在cur_ev_和frame_end之间进行imu的累积
+
         double frameduration = (events_[frame_end].ts - events_[cur_ev_].ts).toSec(); // 累积事件的时间戳范围
         event_rate_ = std::round(static_cast<double>(frame_size_) / frameduration);   // 累积事件频率
         if (event_rate_ < noise_rate_)
@@ -327,32 +258,14 @@ void Tracker::estimateTrajectory()
             continue;
         }
 
-        std::vector<sensor_msgs::Imu::ConstPtr> imu_vector = imu_cache_->getInterval(events_[cur_ev_].ts, events_[frame_end].ts);
-        Eigen::Matrix3f R_meas;
-        Eigen::Vector3f v_meas;
-        Eigen::Vector3f p_meas;
-        float t_meas;
-        Eigen::Matrix<float, 9, 9> Cov_meas;
-        std::tie(R_meas, v_meas, p_meas, t_meas, Cov_meas) = imuIntegrate(imu_vector);
-        // 导入两帧之间imu的更新量
-        importImuMeas(R_meas, v_meas, p_meas, t_meas, Cov_meas);
-
         drawEvents(events_.begin() + cur_ev_, events_.begin() + frame_end, new_img_); // 把frame_size_个事件累积到new_img_
-        cv::buildPyramid(new_img_, pyr_new_, pyramid_levels_);                        // 构建图像金字塔
-        trackFrame();                                                                 // 进行tracking
+        // publishImg();
+        cv::buildPyramid(new_img_, pyr_new_, pyramid_levels_); // 构建图像金字塔
+        trackFrame();                                          // 进行tracking
 
         publishTF();           // 发布tf
         cur_ev_ += step_size_; // 跳过step_size_个事件
     }
-}
-
-void Tracker::importImuMeas(const Eigen::Matrix3f &R_meas, const Eigen::Vector3f &v_meas, const Eigen::Vector3f &p_meas, const float t_meas, const Eigen::Matrix<float, 9, 9> &Cov_meas)
-{
-    R_meas_ = R_meas;
-    v_meas_ = v_meas;
-    p_meas_ = p_meas;
-    t_meas_ = t_meas;
-    Cov_meas_ = Cov_meas;
 }
 
 void Tracker::tfCallback(const tf::tfMessagePtr &msgs)
