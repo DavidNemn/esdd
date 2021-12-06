@@ -67,9 +67,6 @@ private:
     void publishMapOverlapThread();            // 发布地图覆盖图像
     void publishTF();                          // 发布坐标变换
     void publishPose();                        // 发布当前位姿
-    // void publishImg();                         // 发布事件累积图像
-    // image_transport::Publisher kf_image_pub_;  // 发布关键帧
-    // image_transport::Publisher new_image_pub_; // 发布当前帧
 
     void clearEventQueue();  // 清空事件队列
     void postCameraLoaded(); // 加载相机参数

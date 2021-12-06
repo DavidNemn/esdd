@@ -69,7 +69,6 @@ Tracker::Tracker(ros::NodeHandle &nh, ros::NodeHandle nh_private)
     map_sub_ = nh_.subscribe("pointcloud", 0, &Tracker::mapCallback, this);
     tf_sub_ = nh_.subscribe("tf", 0, &Tracker::tfCallback, this);
     poses_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("evo/pose", 0);
-    // new_image_pub_ = it_.advertise("new_image", 1);
 #ifdef TRACKER_DEBUG_REFERENCE_IMAGE
     std::thread map_overlap(&Tracker::publishMapOverlapThread, this);
     map_overlap.detach();
@@ -173,7 +172,7 @@ void Tracker::initialize(const ros::Time &ts)
 
     T_ = T_kf_world.cast<float>().inverse();
     T_kf_ = T_;
-    T_curr_ = Eigen::Isometry3f::Identity();
+    T_curr_inv_ = Eigen::Isometry3f::Identity();
     T_wb_ = T_bc_ * T_ * T_bc_inv_;
 
     while (cur_ev_ + 1 < events_.size() && events_[cur_ev_].ts < TF_kf_world.stamp_)
@@ -194,8 +193,8 @@ void Tracker::updateMap()
         return;
     }
 
-    T_kf_ = T_kf_ * T_curr_;
-    T_curr_ = Eigen::Isometry3f::Identity();
+    T_kf_ = T_kf_ * T_curr_inv_;
+    T_curr_inv_ = Eigen::Isometry3f::Identity();
     kf_ev_ = cur_ev_;
 
     projectMap(); // 投影点云得到关键帧的关键点和雅克比(FCA)
@@ -241,8 +240,6 @@ void Tracker::estimateTrajectory()
 
         size_t frame_end = cur_ev_ + frame_size_;
 
-        // TODO: 在cur_ev_和frame_end之间进行imu的累积
-
         double frameduration = (events_[frame_end].ts - events_[cur_ev_].ts).toSec(); // 累积事件的时间戳范围
         event_rate_ = std::round(static_cast<double>(frame_size_) / frameduration);   // 累积事件频率
         if (event_rate_ < noise_rate_)
@@ -259,8 +256,6 @@ void Tracker::estimateTrajectory()
         }
 
         drawEvents(events_.begin() + cur_ev_, events_.begin() + frame_end, new_img_); // 把frame_size_个事件累积到new_img_
-        // publishImg();
-        cv::buildPyramid(new_img_, pyr_new_, pyramid_levels_); // 构建图像金字塔
         trackFrame();                                          // 进行tracking
 
         publishTF();           // 发布tf
@@ -279,20 +274,6 @@ void Tracker::tfCallback(const tf::tfMessagePtr &msgs)
         tf::StampedTransform t;
         tf::transformStampedMsgToTF(msg, t);
         tf_.setTransform(t);
-
-        // const tf::Vector3 &p = t.getOrigin();
-        // const tf::Quaternion &q = t.getRotation();
-        // geometry_msgs::PoseStampedPtr msg_pose(new geometry_msgs::PoseStamped);
-        // msg_pose->header.stamp = t.stamp_;
-        // msg_pose->header.frame_id = frame_id_;
-        // msg_pose->pose.position.x = p.x();
-        // msg_pose->pose.position.y = p.y();
-        // msg_pose->pose.position.z = p.z();
-        // msg_pose->pose.orientation.x = q.x();
-        // msg_pose->pose.orientation.y = q.y();
-        // msg_pose->pose.orientation.z = q.z();
-        // msg_pose->pose.orientation.w = q.w();
-        // poses_pub_.publish(msg_pose);
     }
 }
 
@@ -319,19 +300,6 @@ void Tracker::clearEventQueue()
 void Tracker::publishMapOverlapThread()
 {
     static ros::Rate r(nhp_.param("event_map_overlap_rate", 25)); // 以r的频率发布overlap图像
-    // static const float z0 = 1. / nh_.param("max_depth", 10.);     // 最大深度(逆深度)
-    // static const float z1 = 1. / nh_.param("min_depth", .1);      // 最小深度(逆深度)
-    // static const float z_range = z1 - z0;
-
-    // static cv::Mat cmap;
-    // if (!cmap.data)
-    // {
-    //     cv::Mat gray(256, 1, CV_8U);
-    //     for (int i = 0; i != gray.rows; ++i)
-    //         gray.at<uchar>(i) = i;
-    //     cv::applyColorMap(gray, cmap, cv::COLORMAP_RAINBOW);
-    // }
-
     static image_transport::Publisher pub = it_.advertise("event_map_overlap", 1);
 
     cv::Mat ev_img, img;
@@ -345,22 +313,6 @@ void Tracker::publishMapOverlapThread()
 
         cv::convertScaleAbs(1. - .25 * new_img_, ev_img, 255);
         cv::cvtColor(ev_img, img, cv::COLOR_GRAY2RGB);
-        // const int s = 2;
-
-        // for (const auto &P : map_local_->points)
-        // {
-        //     Eigen::Vector3f p = T_.inverse() * Eigen::Vector3f(P.x, P.y, P.z);
-        //     p[0] = p[0] / p[2] * fx_ + cx_;
-        //     p[1] = p[1] / p[2] * fy_ + cy_;
-
-        //     int x = std::round(s * p[0]), y = std::round(s * p[1]);
-        //     float z = p[2];
-        //     if (x < 0 || x >= s * width_ || y < 0 || y >= s * height_)
-        //         continue;
-
-        //     cv::Vec3b c = cmap.at<cv::Vec3b>(std::min(255., std::max(255. * (1. / z - z0) / z_range, 0.)));
-        //     cv::circle(img, cv::Point(x, y), 2, cv::Scalar(c[0], c[1], c[2]), -1, cv::LINE_AA, 1);
-        // }
 
         std_msgs::Header header;
         header.stamp = events_[cur_ev_].ts;
@@ -459,14 +411,3 @@ void Tracker::publishPose()
     msg_pose->pose.orientation.w = q.w();
     poses_pub_.publish(msg_pose);
 }
-
-// void Tracker::publishImg()
-// {
-//     cv::Mat ev_img;
-//     cv::convertScaleAbs(1. - .25 * new_img_, ev_img, 255);
-//     static cv_bridge::CvImage cv_image;
-//     cv_image.encoding = "mono8";
-//     cv_image.header.stamp = ros::Time::now();
-//     cv_image.image = new_img_.clone();
-//     new_image_pub_.publish(cv_image.toImageMsg());
-// }
