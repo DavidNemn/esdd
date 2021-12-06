@@ -190,6 +190,12 @@ void LKSE3::init_Jacobian_imu(Eigen::MatrixXf &J_imu)
 void LKSE3::updateStateViariant(Eigen::VectorXf &dx)
 {
     T_curr_ *= SE3::exp(dx).matrix();
+    // 这样更新不大行:
+    // const Eigen::Vector3f delta_phi = dx.segment<3>(0);
+    // const Eigen::Matrix3f R_delta = evo_utils::math::exp_SO3(delta_phi);
+    // const Eigen::Vector3f t_delta = dx.segment<3>(3);
+    // T_curr_.linear() = T_curr_.rotation() * R_delta;
+    // T_curr_.translation() += t_delta;
     x_ += dx;
     // const Eigen::Vector3f delta_phi = dx.segment<3>(0);
     // const Eigen::Matrix3f R_delta = evo_utils::math::exp_SO3(delta_phi);
@@ -199,9 +205,6 @@ void LKSE3::updateStateViariant(Eigen::VectorXf &dx)
     // T_wb_.linear() = T_wb_.rotation() * R_delta;
     // T_wb_.translation() += t_delta;
 
-    // // update T and T_curr
-    // T_ = T_bc_inv_ * T_wb_ * T_bc_;
-    // T_curr_inv_ = T_.inverse() * T_kf_;
     // x_ += dx;
 }
 
@@ -257,7 +260,7 @@ void LKSE3::trackFrame()
     for (size_t lvl = pyramid_levels_; lvl != 0; --lvl)
         updateTransformation(lvl - 1);
     T_curr_inv_ *= SE3::exp(-x_).matrix();
-    T_ = T_kf_ * T_curr_inv_;   // 发布的就是T_, 所以不能放到updateTransformation里边
+    T_ = T_kf_ * T_curr_inv_; // 发布的就是T_, 所以不能放到updateTransformation里边
 }
 
 void LKSE3::drawEvents(EventQueue::iterator ev_first, EventQueue::iterator ev_last, cv::Mat &out)
