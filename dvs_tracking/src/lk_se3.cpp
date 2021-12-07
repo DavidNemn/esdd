@@ -248,7 +248,7 @@ void LKSE3::getError_imu(Eigen::MatrixXf &J_imu, Eigen::VectorXf &r_imu)
 
 void LKSE3::trackFrame()
 {
-    T_curr_ = T_curr_inv_.inverse();
+    // T_curr_ = T_curr_inv_.inverse();
     x_.setZero();
 
     v_last_ = v_;
@@ -256,11 +256,14 @@ void LKSE3::trackFrame()
     T_wb_.linear() = T_wb_last_.rotation() * R_meas_;
     v_ = T_wb_last_.rotation() * v_meas_ + v_last_ + g_ * t_meas_;
     T_wb_.translation() = T_wb_last_.rotation() * p_meas_ + T_wb_last_.translation() + v_last_ * t_meas_ + 0.5 * g_ * t_meas_ * t_meas_;
+    T_tmp_ = T_bc_inv_ * T_wb_ * T_bc_;
+    T_curr_ = T_tmp_.inverse() * T_kf_;
 
     for (size_t lvl = pyramid_levels_; lvl != 0; --lvl)
         updateTransformation(lvl - 1);
     T_curr_inv_ *= SE3::exp(-x_).matrix();
     T_ = T_kf_ * T_curr_inv_; // 发布的就是T_, 所以不能放到updateTransformation里边
+    T_wb_ = T_bc_ * T_ * T_bc_inv_;
 }
 
 void LKSE3::drawEvents(EventQueue::iterator ev_first, EventQueue::iterator ev_last, cv::Mat &out)

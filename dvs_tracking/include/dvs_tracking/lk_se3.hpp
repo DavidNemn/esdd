@@ -87,6 +87,7 @@ protected:
     Eigen::Isometry3f T_;          // 当前帧->世界坐标系
     Eigen::Isometry3f T_curr_inv_; // 当前帧->关键帧
     Eigen::Isometry3f T_curr_;     // 关键帧->当前帧
+    Eigen::Isometry3f T_tmp_;      //
     Eigen::Isometry3f T_kf_;       // 关键帧->世界坐标系
     Eigen::Isometry3f T_wb_last_;  // 上一时刻位姿(机体系->世界坐标系)
     Eigen::Isometry3f T_wb_;       // 机体系->世界坐标系
