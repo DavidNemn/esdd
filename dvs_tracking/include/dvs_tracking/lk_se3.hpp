@@ -6,12 +6,10 @@
 #include <pcl/common/transforms.h>
 #include <Eigen/StdVector>
 #include <deque>
+#include <vector>
 #include <opencv2/core/core.hpp>
 #include <sophus/se3.hpp>
 #include <ros/ros.h>
-
-template <typename T>
-using vector_aligned = std::vector<T, Eigen::aligned_allocator<T>>;
 
 // 光流跟踪基类
 class LKSE3
@@ -20,22 +18,6 @@ class LKSE3
     typedef Eigen::Matrix<float, 6, 1> Vector6;
 
 public:
-    struct Keypoint
-    {
-        // 字节对齐
-        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-
-        Eigen::Vector3f P; // 相机坐标系下的3D点
-        float pixel_value; // 像素值
-        Vector6 J;         // 雅克比矩阵
-        Matrix6 JJt;       // J.J^T
-
-        Keypoint(Eigen::Vector3f _P, float _pixel_value, Vector6 _J, Matrix6 _JJt)
-            : P(_P), pixel_value(_pixel_value), J(_J), JJt(_JJt) {}
-        // Keypoint(Eigen::Vector3f _P, float _pixel_value)
-        //     : P(_P), pixel_value(_pixel_value) {}
-    }; // 定义处理的关键点
-
     typedef pcl::PointXYZ Point;
     typedef pcl::PointCloud<Point> PointCloud;
     typedef std::deque<dvs_msgs::Event> EventQueue;
@@ -52,14 +34,16 @@ protected:
     int map_blur_;       // 把点云投影到关键帧时的模糊程度
     float depth_median_; // 关键帧的平均深度
 
-    std::vector<Keypoint, Eigen::aligned_allocator<Keypoint>> keypoints_; // 关键帧的关键点
+    std::vector<Eigen::Vector3f> keypoints; // 关键点坐标
+    std::vector<float> pixel_values;        // 像素值
+    std::vector<Vector6> J;                 // 雅克比
+    std::vector<Matrix6> JJt;               // J*J^T
+    int npts;                               // 关键点数量
 
     int n_visible_;             // 关键帧上的关键点在当前帧的可视化程度(个数)
     float kf_visibility_;       // 关键帧上的关键点在当前帧的可视化程度(百分比)
     PointCloud::Ptr map_;       // 基于关键帧构建的地图
     PointCloud::Ptr map_local_; // 在当前帧可视的局部地图
-
-    // TODO : 使用fca求kf_img_到new_img_的雅克比矩阵
 
     cv::Mat depth_kf_;              // 关键帧的深度图
     cv::Mat kf_img_;                // 关键帧

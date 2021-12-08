@@ -28,8 +28,8 @@ void LKSE3::projectMap()
     {
         Eigen::Vector3f p(P.x, P.y, P.z);
         p = T_kf_.inverse() * p;
-        p[0] = p[0] / p[2] * c_kf_.fx() + c_kf_.cx();
-        p[1] = p[1] / p[2] * c_kf_.fy() + c_kf_.cy();
+        p[0] = p[0] / p[2] * fx_ + cx_;
+        p[1] = p[1] / p[2] * fy_ + cy_;
         z_values.push_back(p[2]);
         ++n_points;
         if (p[0] < 0 || p[1] < 0)
@@ -76,7 +76,13 @@ void LKSE3::precomputereferenceFrame()
     grad_y = grad_y_img.ptr<float>(0); // y方向像素梯度
     int w = kf_img_.cols, h = kf_img_.rows;
 
-    keypoints_.clear();
+    // 对于图像中梯度值大的点, 加入keypoints_
+    keypoints.clear();
+    pixel_values.clear();
+    J.clear();
+    JJt.clear();
+    npts = 0;
+
     Vector6 vec = Vector6::Zero();
     Eigen::Map<const Vector6> vec6(&vec(0));
 
@@ -124,8 +130,7 @@ void LKSE3::precomputereferenceFrame()
 
     for (size_t y = 0; y != h; ++y)
     {
-        float v = ((float)y - c_kf_.cy()) / c_kf_.fy(); // 实际像素位置v
-
+        float v = ((float)y - cy_) / fy_; // 归一化平面像素位置v
         for (size_t x = 0; x != w; ++x)
         {
             size_t offset = y * w + x;
@@ -135,10 +140,10 @@ void LKSE3::precomputereferenceFrame()
             if (pixel_value < .01)
                 continue;
 
-            float u = ((float)x - c_kf_.cx()) / c_kf_.fx(); // 实际像素位置u
+            float u = ((float)x - cx_) / fx_; // 归一化平面像素位置u
 
-            float gx = grad_x[offset] * c_kf_.fx(),
-                  gy = grad_y[offset] * c_kf_.fy(); // 梯度
+            float gx = grad_x[offset] * fx_,
+                  gy = grad_y[offset] * fy_; // 梯度
 
             Vector6 v1, v2;
             v1 << -1. / z, 0., u / z, u * v, -(1. + u * u), v;
@@ -146,8 +151,11 @@ void LKSE3::precomputereferenceFrame()
 
             vec = gx * v1 + gy * v2; // 雅克比矩阵为6维, J.J^T为6×6
 
-            // 根据上述结果构建Hessian矩阵, 作为属性放进keypoints_里
-            keypoints_.push_back(Keypoint(Eigen::Vector3f(u * z, v * z, z), pixel_value, vec, vec6 * vec6.transpose()));
+            npts++;
+            keypoints.push_back({u * z, v * z, z});
+            pixel_values.push_back(pixel_value);
+            J.push_back(vec);
+            JJt.push_back(vec6 * vec6.transpose());
         }
     }
 }
@@ -322,7 +330,6 @@ void LKSE3::updateTransformation(size_t pyr_lvl)
     //         break;
     // }
 
-    // 原来的程序是这样:
     static Eigen::MatrixXf H;
     static Eigen::VectorXf b, dx;
     const cv::Mat &img = pyr_new_[pyr_lvl];
@@ -337,22 +344,21 @@ void LKSE3::updateTransformation(size_t pyr_lvl)
     {
         H = Matrix6::Zero();
         b = Vector6::Zero();
-        for (auto i = 0; i != keypoints_.size(); ++i)
+        for (size_t i = 0; i < npts; i++)
         {
-            const Keypoint &k = keypoints_[i];
             // 关键帧像素位置投影到当前帧
-            Eigen::Vector3f p = T_curr_ * k.P;
+            Eigen::Vector3f p = T_curr_ * keypoints[i];
             float u = p[0] / p[2] * fx + cx,
                   v = p[1] / p[2] * fy + cy;
             // 当前帧与投影融合得到新像素
             float I_new = evo_utils::interpolate::bilinear(new_img, w, h, u, v); // 双线性插值
             if (I_new == -1.f)
                 continue;
-            float res = I_new - k.pixel_value; // 像素值偏差
+            float res = I_new - pixel_values[i];
             if (res >= .95f)
                 continue;
-            b.noalias() += k.J * res; // 雅克比矩阵
-            H.noalias() += k.JJt;     // 海森矩阵
+            b.noalias() += J[i] * res; // 雅克比矩阵
+            H.noalias() += JJt[i];     // 海森矩阵
         }
         dx = H.ldlt().solve(b * scale); // 核心位姿更新公式, Cholesky分解
         if ((bool)std::isnan((float)dx[0]))
