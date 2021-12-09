@@ -12,6 +12,13 @@
 		"python.analysis.extraPaths": [
 			"/home/stancy/workspace/evio_workspace/evo_writebymyself_ws/devel/lib/python2.7/dist-packages",
 			"/opt/ros/melodic/lib/python2.7/dist-packages"
-		]
+		],
+		"files.associations": {
+			"*.txt": "cmake",
+			"*.ipp": "cpp",
+			"deque": "cpp",
+			"string": "cpp",
+			"vector": "cpp"
+		}
 	}
 }

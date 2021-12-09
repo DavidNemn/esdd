@@ -61,102 +61,126 @@ void LKSE3::projectMap()
     depth_median_ = z_values[z_values.size() / 2];
     kf_visibility_ = static_cast<float>(n_visible_) / n_points;
 
+    cv::buildPyramid(kf_img_, pyr_kf_, pyramid_levels_);      // 构建图像金字塔
+    cv::buildPyramid(depth_kf_, pyr_depth_, pyramid_levels_); // 构建图像金字塔
+
     precomputereferenceFrame();
 }
 
 void LKSE3::precomputereferenceFrame()
 {
-    // sobel算子计算图像梯度
-    cv::Mat grad_x_img, grad_y_img;
-    cv::Sobel(kf_img_, grad_x_img, CV_32F, 1, 0);
-    cv::Sobel(kf_img_, grad_y_img, CV_32F, 0, 1);
-    // 再反投影得到keypoints_
-    float *depth_last = depth_kf_.ptr<float>(0);
-    grad_x = grad_x_img.ptr<float>(0); // x方向像素梯度
-    grad_y = grad_y_img.ptr<float>(0); // y方向像素梯度
-    int w = kf_img_.cols, h = kf_img_.rows;
-
-    // 对于图像中梯度值大的点, 加入keypoints_
-    keypoints.clear();
-    pixel_values.clear();
-    J.clear();
-    JJt.clear();
-    npts = 0;
-
-    Vector6 vec = Vector6::Zero();
-    Eigen::Map<const Vector6> vec6(&vec(0));
-
-    // Eigen::Matrix<float, 1, 6> J_i;    // Jacobian for one point
-    // Eigen::Matrix<float, 1, 2> J_grad; // gradient jacobian
-    // Eigen::Matrix<float, 2, 3> J_proj; // projection jacobian
-    // Eigen::Matrix<float, 3, 6> J_SE3;  // exponential jacobian
-    // for (size_t j = 0; j != h; ++j)
-    // {
-    //     for (size_t i = 0; i != w; ++i)
-    //     {
-    //         size_t offset = j * w + i;
-    //         float z = depth_last[offset]; // 深度
-    //         float pixel_value = kf_img_.at<float>(j, i);
-
-    //         if (pixel_value < .01)
-    //             continue;
-
-    //         float x = ((float)i - c_kf_.cx()) / c_kf_.fx() * z;
-    //         float y = ((float)j - c_kf_.cy()) / c_kf_.fy() * z;
-
-    //         float gx = grad_x[offset] * c_kf_.fx(),
-    //               gy = grad_y[offset] * c_kf_.fy(); // 梯度
-
-    //         J_grad(0, 0) = gx;
-    //         J_grad(0, 1) = gy;
-    //         J_proj(0, 0) = c_kf_.fx() / z;
-    //         J_proj(1, 0) = 0;
-    //         J_proj(0, 1) = 0;
-    //         J_proj(1, 1) = c_kf_.fy() / z;
-    //         J_proj(0, 2) = -c_kf_.fx() * x / (z * z);
-    //         J_proj(1, 2) = -c_kf_.fy() * y / (z * z);
-
-    //         Eigen::Matrix3f npHat;
-    //         npHat << 0, z, -y, -z, 0, x, y, -x, 0;
-    //         J_SE3 << Eigen::Matrix3f::Identity(3, 3), npHat;
-
-    //         J_i = J_grad * J_proj * J_SE3;
-    //         vec = J_i.transpose();
-
-    //         // 根据上述结果构建Hessian矩阵, 作为属性放进keypoints_里
-    //         keypoints_.push_back(Keypoint(Eigen::Vector3f(x, y, z), pixel_value, vec, vec6 * vec6.transpose()));
-    //     }
-    // }
-
-    for (size_t y = 0; y != h; ++y)
+    keypoints = std::vector<std::vector<Eigen::Vector3f>>(pyramid_levels_);
+    pixel_values = std::vector<std::vector<float>>(pyramid_levels_);
+    J = std::vector<std::vector<Vector6>>(pyramid_levels_);
+    JJt = std::vector<std::vector<Matrix6>>(pyramid_levels_);
+    npts = std::vector<int>(pyramid_levels_);
+    for (int pyr_lvl = pyramid_levels_ - 1; pyr_lvl >= 0; pyr_lvl--)
     {
-        float v = ((float)y - cy_) / fy_; // 归一化平面像素位置v
-        for (size_t x = 0; x != w; ++x)
+        // sobel算子计算图像梯度
+        cv::Mat grad_x_img, grad_y_img;
+        cv::Sobel(pyr_kf_[pyr_lvl], grad_x_img, CV_32F, 1, 0);
+        cv::Sobel(pyr_kf_[pyr_lvl], grad_y_img, CV_32F, 0, 1);
+        // 再反投影得到keypoints_
+        float *depth_last = pyr_depth_[pyr_lvl].ptr<float>(0);
+        grad_x = grad_x_img.ptr<float>(0); // x方向像素梯度
+        grad_y = grad_y_img.ptr<float>(0); // y方向像素梯度
+
+        float scale = std::pow(2.f, (float)pyr_lvl);
+        float fx = fx_ / scale,
+              fy = fy_ / scale,
+              cx = cx_ / scale,
+              cy = cy_ / scale;
+
+        int w = kf_img_.cols / scale, h = kf_img_.rows / scale;
+
+        // 对于图像中梯度值大的点, 加入keypoints_
+        keypoints[pyr_lvl].clear();
+        pixel_values[pyr_lvl].clear();
+        J[pyr_lvl].clear();
+        JJt[pyr_lvl].clear();
+        npts[pyr_lvl] = 0;
+
+        Vector6 vec = Vector6::Zero();
+        Eigen::Map<const Vector6> vec6(&vec(0));
+
+        Eigen::Matrix<float, 1, 6> J_i;    // Jacobian for one point
+        Eigen::Matrix<float, 1, 2> J_grad; // gradient jacobian
+        Eigen::Matrix<float, 2, 3> J_proj; // projection jacobian
+        Eigen::Matrix<float, 3, 6> J_SE3;  // exponential jacobian
+
+        for (size_t j = 0; j != h; ++j)
         {
-            size_t offset = y * w + x;
-            float z = depth_last[offset]; // 深度
-            float pixel_value = kf_img_.at<float>(y, x);
+            for (size_t i = 0; i != w; ++i)
+            {
+                size_t offset = j * w + i;
+                float z = depth_last[offset]; // 深度
+                float pixel_value = pyr_kf_[pyr_lvl].at<float>(j, i);
 
-            if (pixel_value < .01)
-                continue;
+                if (pixel_value < .01)
+                    continue;
 
-            float u = ((float)x - cx_) / fx_; // 归一化平面像素位置u
+                float x = ((float)i - cx) / fx * z;
+                float y = ((float)j - cy) / fy * z;
 
-            float gx = grad_x[offset] * fx_,
-                  gy = grad_y[offset] * fy_; // 梯度
+                // float gx = grad_x[offset] * fx,
+                //       gy = grad_y[offset] * fy; // 梯度
+                float gx = grad_x[offset],
+                      gy = grad_y[offset]; // 梯度
 
-            Vector6 v1, v2;
-            v1 << -1. / z, 0., u / z, u * v, -(1. + u * u), v;
-            v2 << 0., -1. / z, v / z, 1 + v * v, -u * v, -u;
+                J_grad(0, 0) = gx;
+                J_grad(0, 1) = gy;
+                J_proj(0, 0) = fx / z;
+                J_proj(1, 0) = 0;
+                J_proj(0, 1) = 0;
+                J_proj(1, 1) = fy / z;
+                J_proj(0, 2) = -fx * x / (z * z);
+                J_proj(1, 2) = -fy * y / (z * z);
 
-            vec = gx * v1 + gy * v2; // 雅克比矩阵为6维, J.J^T为6×6
+                Eigen::Matrix3f npHat;
+                npHat << 0, z, -y, -z, 0, x, y, -x, 0;
+                J_SE3 << Eigen::Matrix3f::Identity(3, 3), npHat;
 
-            npts++;
-            keypoints.push_back({u * z, v * z, z});
-            pixel_values.push_back(pixel_value);
-            J.push_back(vec);
-            JJt.push_back(vec6 * vec6.transpose());
+                J_i = J_grad * J_proj * J_SE3;
+                vec = J_i.transpose();
+
+                npts[pyr_lvl]++;
+                keypoints[pyr_lvl].push_back({x, y, z});
+                pixel_values[pyr_lvl].push_back(pixel_value);
+                J[pyr_lvl].push_back(vec);
+                JJt[pyr_lvl].push_back(vec6 * vec6.transpose());
+            }
         }
+
+        // for (size_t y = 0; y != h; ++y)
+        // {
+        //     float v = ((float)y - cy) / fy; // 归一化平面像素位置v
+        //     for (size_t x = 0; x != w; ++x)
+        //     {
+        //         size_t offset = y * w + x;
+        //         float z = depth_last[offset]; // 深度
+        //         float pixel_value = pyr_kf_[pyr_lvl].at<float>(y, x);
+
+        //         if (pixel_value < .01)
+        //             continue;
+
+        //         float u = ((float)x - cx) / fx; // 归一化平面像素位置u
+
+        //         float gx = grad_x[offset] * fx,
+        //               gy = grad_y[offset] * fy; // 梯度
+
+        //         Vector6 v1, v2;
+        //         v1 << -1. / z, 0., u / z, u * v, -(1. + u * u), v;
+        //         v2 << 0., -1. / z, v / z, 1 + v * v, -u * v, -u;
+
+        //         vec = gx * v1 + gy * v2; // 雅克比矩阵为6维, J.J^T为6×6
+
+        //         npts[pyr_lvl]++;
+        //         keypoints[pyr_lvl].push_back({u * z, v * z, z});
+        //         pixel_values[pyr_lvl].push_back(pixel_value);
+        //         J[pyr_lvl].push_back(vec);
+        //         JJt[pyr_lvl].push_back(vec6 * vec6.transpose());
+        //     }
+        // }
     }
 }
 
@@ -176,21 +200,22 @@ void LKSE3::updateTransformation(size_t pyr_lvl)
     {
         H = Matrix6::Zero();
         b = Vector6::Zero();
-        for (size_t i = 0; i < npts; i++)
+        for (size_t i = 0; i < npts[pyr_lvl]; i++)
         {
             // 关键帧像素位置投影到当前帧
-            Eigen::Vector3f p = T_curr_ * keypoints[i];
+            Eigen::Vector3f p = T_curr_ * keypoints[pyr_lvl][i];
             float u = p[0] / p[2] * fx + cx,
                   v = p[1] / p[2] * fy + cy;
             // 当前帧与投影融合得到新像素
             float I_new = evo_utils::interpolate::bilinear(new_img, w, h, u, v); // 双线性插值
             if (I_new == -1.f)
                 continue;
-            float res = I_new - pixel_values[i];
-            if (res >= .95f)
-                continue;
-            b.noalias() += J[i] * res; // 雅克比矩阵
-            H.noalias() += JJt[i];     // 海森矩阵
+            // float res = I_new - pixel_values[pyr_lvl][i];
+            float res = pixel_values[pyr_lvl][i] - I_new;
+            // if (res >= .95f)
+            //     continue;
+            b.noalias() += J[pyr_lvl][i] * res; // 雅克比矩阵
+            H.noalias() += JJt[pyr_lvl][i];     // 海森矩阵
         }
         dx = H.ldlt().solve(b * scale); // 核心位姿更新公式, Cholesky分解
         if ((bool)std::isnan((float)dx[0]))
