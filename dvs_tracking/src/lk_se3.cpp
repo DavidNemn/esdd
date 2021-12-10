@@ -80,48 +80,6 @@ void LKSE3::precomputereferenceFrame()
     Vector6 vec = Vector6::Zero();
     Eigen::Map<const Vector6> vec6(&vec(0));
 
-    // Eigen::Matrix<float, 1, 6> J_i;    // Jacobian for one point
-    // Eigen::Matrix<float, 1, 2> J_grad; // gradient jacobian
-    // Eigen::Matrix<float, 2, 3> J_proj; // projection jacobian
-    // Eigen::Matrix<float, 3, 6> J_SE3;  // exponential jacobian
-    // for (size_t j = 0; j != h; ++j)
-    // {
-    //     for (size_t i = 0; i != w; ++i)
-    //     {
-    //         size_t offset = j * w + i;
-    //         float z = depth_last[offset]; // 深度
-    //         float pixel_value = kf_img_.at<float>(j, i);
-
-    //         if (pixel_value < .01)
-    //             continue;
-
-    //         float x = ((float)i - c_kf_.cx()) / c_kf_.fx() * z;
-    //         float y = ((float)j - c_kf_.cy()) / c_kf_.fy() * z;
-
-    //         float gx = grad_x[offset] * c_kf_.fx(),
-    //               gy = grad_y[offset] * c_kf_.fy(); // 梯度
-
-    //         J_grad(0, 0) = gx;
-    //         J_grad(0, 1) = gy;
-    //         J_proj(0, 0) = c_kf_.fx() / z;
-    //         J_proj(1, 0) = 0;
-    //         J_proj(0, 1) = 0;
-    //         J_proj(1, 1) = c_kf_.fy() / z;
-    //         J_proj(0, 2) = -c_kf_.fx() * x / (z * z);
-    //         J_proj(1, 2) = -c_kf_.fy() * y / (z * z);
-
-    //         Eigen::Matrix3f npHat;
-    //         npHat << 0, z, -y, -z, 0, x, y, -x, 0;
-    //         J_SE3 << Eigen::Matrix3f::Identity(3, 3), npHat;
-
-    //         J_i = J_grad * J_proj * J_SE3;
-    //         vec = J_i.transpose();
-
-    //         // 根据上述结果构建Hessian矩阵, 作为属性放进keypoints_里
-    //         keypoints_.push_back(Keypoint(Eigen::Vector3f(x, y, z), pixel_value, vec, vec6 * vec6.transpose()));
-    //     }
-    // }
-
     for (size_t y = 0; y != h; ++y)
     {
         float v = ((float)y - cy_) / fy_; // 归一化平面像素位置v
@@ -136,14 +94,14 @@ void LKSE3::precomputereferenceFrame()
 
             float u = ((float)x - cx_) / fx_; // 归一化平面像素位置u
 
-            float gx = grad_x[offset] * fx_,
-                  gy = grad_y[offset] * fy_; // 梯度
+            float gx = grad_x[offset],
+                  gy = grad_y[offset]; // 梯度
 
             Vector6 v1, v2;
             v1 << -1. / z, 0., u / z, u * v, -(1. + u * u), v;
             v2 << 0., -1. / z, v / z, 1 + v * v, -u * v, -u;
 
-            vec = gx * v1 + gy * v2; // 雅克比矩阵为6维, J.J^T为6×6
+            vec = gx * fx_ * v1 + gy * fy_ * v2; // 雅克比矩阵为6维, J.J^T为6×6
 
             npts++;
             keypoints.push_back({u * z, v * z, z});
