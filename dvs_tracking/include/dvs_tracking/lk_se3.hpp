@@ -34,24 +34,22 @@ protected:
     int map_blur_;       // 把点云投影到关键帧时的模糊程度
     float depth_median_; // 关键帧的平均深度
 
-    std::vector<std::vector<Eigen::Vector3f>> keypoints; // 关键点坐标
-    std::vector<std::vector<float>> pixel_values;        // 像素值
-    std::vector<std::vector<Vector6>> J;                 // 雅克比
-    std::vector<std::vector<Matrix6>> JJt;               // J*J^T
-    std::vector<int> npts;                               // 关键点数量
+    std::vector<Eigen::Vector3f> keypoints; // 关键点坐标
+    std::vector<float> pixel_values;        // 像素值
+    std::vector<Vector6> J;                 // 雅克比
+    std::vector<Matrix6> JJt;               // J*J^T
+    int npts;                               // 关键点数量
 
     int n_visible_;             // 关键帧上的关键点在当前帧的可视化程度(个数)
     float kf_visibility_;       // 关键帧上的关键点在当前帧的可视化程度(百分比)
     PointCloud::Ptr map_;       // 基于关键帧构建的地图
     PointCloud::Ptr map_local_; // 在当前帧可视的局部地图
 
-    cv::Mat depth_kf_;               // 关键帧的深度图
-    std::vector<cv::Mat> pyr_depth_; // 关键帧深度图的图像金字塔
-    cv::Mat kf_img_;                 // 关键帧
-    std::vector<cv::Mat> pyr_kf_;    // 关键帧kf_img_的图像金字塔
-    cv::Mat new_img_;                // 当前帧
-    std::vector<cv::Mat> pyr_new_;   // 当前帧new_img_的图像金字塔
-    cv::Mat grad_x_img, grad_y_img;  // xy方向上的梯度图像
+    cv::Mat depth_kf_;              // 关键帧的深度图
+    cv::Mat kf_img_;                // 关键帧
+    cv::Mat new_img_;               // 当前帧
+    std::vector<cv::Mat> pyr_new_;  // 当前帧new_img_的图像金字塔
+    cv::Mat grad_x_img, grad_y_img; // xy方向上的梯度图像
 
     float *grad_x, *grad_y;
 
@@ -89,5 +87,4 @@ protected:
     Eigen::Vector3f v_last_; // 上一时刻速度(机体系下)
     Eigen::Vector3f v_;      // 速度(机体系下)
 };
-
-#endif // LK_SE3_H
+# endif

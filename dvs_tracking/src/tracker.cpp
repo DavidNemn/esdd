@@ -199,11 +199,7 @@ void Tracker::updateMap()
 
     projectMap(); // 投影点云得到关键帧的关键点和雅克比(FCA)
 
-    // if (keypoints_.size() < min_n_keypoints)
-    // {
-    //     LOG(WARNING) << "Losing track!"; // 关键点数量不够, tracking失败!
-    // }
-    if (npts[0] < min_n_keypoints)
+    if (keypoints.size() < min_n_keypoints)
     {
         LOG(WARNING) << "Losing track!"; // 关键点数量不够, tracking失败!
     }
@@ -216,8 +212,7 @@ void Tracker::trackingThread()
     while (ros::ok())
     {
         r.sleep();
-        // if (!idle_ && keypoints_.size() > 0)
-        if (!idle_ && npts[0] > 0)
+        if (!idle_ && keypoints.size() > 0)
         {
             estimateTrajectory();
         }
