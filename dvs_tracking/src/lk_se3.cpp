@@ -76,6 +76,10 @@ void LKSE3::precomputereferenceFrame()
     J.clear();
     JJt.clear();
 
+    Eigen::Matrix<float, 1, 2> J_grad;
+    Eigen::Matrix<float, 2, 3> J_proj;
+    Eigen::Matrix<float, 3, 6> J_SE3;
+
     Vector6 vec = Vector6::Zero();
     Eigen::Map<const Vector6> vec6(&vec(0));
 
@@ -94,14 +98,29 @@ void LKSE3::precomputereferenceFrame()
             float Y = z * ((float)y - cy_) / fy_;
             float Z_inv = 1.f / z, Z2_inv = 1.f / (z * z);
 
-            float gx = grad_x[offset],
-                  gy = grad_y[offset]; // 梯度
+            // float gx = grad_x[offset],
+            //       gy = grad_y[offset]; // 梯度
 
-            Vector6 v1, v2;
-            v1 << -fx_ * Z_inv, 0., fx_ * X * Z2_inv, fx_ * X * Y * Z2_inv, -(fx_ + fx_ * X * X * Z2_inv), fx_ * Y * Z_inv;
-            v2 << 0, -fy_ * Z_inv, fy_ * Y * Z2_inv, fy_ + fy_ * Y * Y * Z2_inv, -fy_ * X * Y * Z2_inv, -fy_ * X * Z_inv;
+            // Vector6 v1, v2;
+            // v1 << -fx_ * Z_inv, 0., fx_ * X * Z2_inv, fx_ * X * Y * Z2_inv, -(fx_ + fx_ * X * X * Z2_inv), fx_ * Y * Z_inv;
+            // v2 << 0, -fy_ * Z_inv, fy_ * Y * Z2_inv, fy_ + fy_ * Y * Y * Z2_inv, -fy_ * X * Y * Z2_inv, -fy_ * X * Z_inv;
 
-            vec = gx * v1 + gy * v2; // 雅克比矩阵为6维, J.J^T为6×6
+            // vec = gx * v1 + gy * v2; // 雅克比矩阵为6维, J.J^T为6×6
+            J_grad(0, 0) = grad_x[offset];
+            J_grad(0, 1) = grad_y[offset];
+
+            J_proj(0, 0) = fx_ * Z_inv;
+            J_proj(1, 0) = 0;
+            J_proj(0, 1) = 0;
+            J_proj(1, 1) = fy_ * Z_inv;
+            J_proj(0, 2) = -fx_ * X * Z2_inv;
+            J_proj(1, 2) = -fy_ * Y * Z2_inv;
+
+            Eigen::Matrix3f npHat;
+            npHat << 0, z, -Y, -z, 0, X, Y, -X, 0;
+            J_SE3 << Eigen::Matrix3f::Identity(3, 3), npHat;
+
+            vec = -(J_grad * J_proj * J_SE3).transpose();
 
             keypoints.push_back({X, Y, z});
             pixel_values.push_back(pixel_value);
