@@ -28,20 +28,14 @@ protected:
     size_t max_iterations_; // 最大迭代次数, 5
     size_t pyramid_levels_; // 图像金字塔层数
 
-    float weight_scale_trans_; // 由于平移残差增加的权重, 0
-    float weight_scale_rot_;   // 由于旋转残差增加的权重, 0
-
     int map_blur_;       // 把点云投影到关键帧时的模糊程度
-    float depth_median_; // 关键帧的平均深度
 
     std::vector<Eigen::Vector3f> keypoints; // 关键点坐标
     std::vector<float> pixel_values;        // 像素值
     std::vector<Vector6> J;                 // 雅克比
     std::vector<Matrix6> JJt;               // J*J^T
     int npts;                               // 关键点数量
-
-    int n_visible_;             // 关键帧上的关键点在当前帧的可视化程度(个数)
-    float kf_visibility_;       // 关键帧上的关键点在当前帧的可视化程度(百分比)
+    
     PointCloud::Ptr map_;       // 基于关键帧构建的地图
     PointCloud::Ptr map_local_; // 在当前帧可视的局部地图
 

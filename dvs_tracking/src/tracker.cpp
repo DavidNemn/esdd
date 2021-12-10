@@ -42,9 +42,6 @@ Tracker::Tracker(ros::NodeHandle &nh, ros::NodeHandle nh_private)
     map_blur_ = nhp_.param("map_blur", 5);
     pyramid_levels_ = nhp_.param("pyramid_levels", 1);
 
-    weight_scale_trans_ = rpg_common_ros::param<float>(nhp_, "weight_scale_translation", 0.);
-    weight_scale_rot_ = rpg_common_ros::param<float>(nhp_, "weight_scale_rotation", 0.);
-
     T_ = T_curr_ = T_kf_ = T_wb_ = Eigen::Isometry3f::Identity();
     b_w_ << 0, 0, 0;
     b_a_ << 0, 0, 0;

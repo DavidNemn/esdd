@@ -21,7 +21,6 @@ void LKSE3::projectMap()
     depthmap = cv::Mat(s, CV_32F, cv::Scalar(0.));
     cv::Mat img(s, CV_32F, cv::Scalar(0.));
 
-    n_visible_ = 0;
     size_t n_points = 0;
     // 先投影得到kf_img_
     for (const auto &P : map_->points)
@@ -48,7 +47,6 @@ void LKSE3::projectMap()
 
         img.at<float>(y, x) = 1.;
         map_local_->push_back(P);
-        ++n_visible_;
     }
 
     const int k = map_blur_;
@@ -56,10 +54,6 @@ void LKSE3::projectMap()
     cv::GaussianBlur(depthmap, depthmap, cv::Size(k, k), 0.);
     depthmap /= img;
     kf_img_ = img;
-
-    std::nth_element(z_values.begin(), z_values.begin() + z_values.size() / 2, z_values.end());
-    depth_median_ = z_values[z_values.size() / 2];
-    kf_visibility_ = static_cast<float>(n_visible_) / n_points;
 
     precomputereferenceFrame();
 }
