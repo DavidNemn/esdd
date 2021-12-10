@@ -81,7 +81,6 @@ void LKSE3::precomputereferenceFrame()
 
     for (size_t y = 0; y != h; ++y)
     {
-        float v = ((float)y - cy_) / fy_; // 归一化平面像素位置v
         for (size_t x = 0; x != w; ++x)
         {
             size_t offset = y * w + x;
@@ -91,18 +90,20 @@ void LKSE3::precomputereferenceFrame()
             if (pixel_value < .01)
                 continue;
 
-            float u = ((float)x - cx_) / fx_; // 归一化平面像素位置u
+            float X = z * ((float)x - cx_) / fx_;
+            float Y = z * ((float)y - cy_) / fy_;
+            float Z_inv = 1.f / z, Z2_inv = 1.f / (z * z);
 
             float gx = grad_x[offset],
                   gy = grad_y[offset]; // 梯度
 
             Vector6 v1, v2;
-            v1 << -1. / z, 0., u / z, u * v, -(1. + u * u), v;
-            v2 << 0., -1. / z, v / z, 1 + v * v, -u * v, -u;
+            v1 << -fx_ * Z_inv, 0., fx_ * X * Z2_inv, fx_ * X * Y * Z2_inv, -(fx_ + fx_ * X * X * Z2_inv), fx_ * Y * Z_inv;
+            v2 << 0, -fy_ * Z_inv, fy_ * Y * Z2_inv, fy_ + fy_ * Y * Y * Z2_inv, -fy_ * X * Y * Z2_inv, -fy_ * X * Z_inv;
 
-            vec = gx * fx_ * v1 + gy * fy_ * v2; // 雅克比矩阵为6维, J.J^T为6×6
+            vec = gx * v1 + gy * v2; // 雅克比矩阵为6维, J.J^T为6×6
 
-            keypoints.push_back({u * z, v * z, z});
+            keypoints.push_back({X, Y, z});
             pixel_values.push_back(pixel_value);
             J.push_back(vec);
             JJt.push_back(vec6 * vec6.transpose());
