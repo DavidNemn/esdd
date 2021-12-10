@@ -34,7 +34,6 @@ protected:
     std::vector<float> pixel_values;        // 像素值
     std::vector<Vector6> J;                 // 雅克比
     std::vector<Matrix6> JJt;               // J*J^T
-    int npts;                               // 关键点数量
 
     PointCloud::Ptr map_;       // 基于关键帧构建的地图
     PointCloud::Ptr map_local_; // 在当前帧可视的局部地图

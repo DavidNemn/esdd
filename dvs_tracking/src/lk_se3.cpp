@@ -75,7 +75,6 @@ void LKSE3::precomputereferenceFrame()
     pixel_values.clear();
     J.clear();
     JJt.clear();
-    npts = 0;
 
     Vector6 vec = Vector6::Zero();
     Eigen::Map<const Vector6> vec6(&vec(0));
@@ -103,7 +102,6 @@ void LKSE3::precomputereferenceFrame()
 
             vec = gx * fx_ * v1 + gy * fy_ * v2; // 雅克比矩阵为6维, J.J^T为6×6
 
-            npts++;
             keypoints.push_back({u * z, v * z, z});
             pixel_values.push_back(pixel_value);
             J.push_back(vec);
@@ -128,7 +126,7 @@ void LKSE3::updateTransformation(size_t pyr_lvl)
     {
         H = Matrix6::Zero();
         b = Vector6::Zero();
-        for (size_t i = 0; i < npts; i++)
+        for (size_t i = 0; i < keypoints.size(); i++)
         {
             // 关键帧像素位置投影到当前帧
             Eigen::Vector3f p = T_curr_ * keypoints[i];
