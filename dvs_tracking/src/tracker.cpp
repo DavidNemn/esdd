@@ -43,9 +43,6 @@ Tracker::Tracker(ros::NodeHandle &nh, ros::NodeHandle nh_private)
     map_blur_ = nhp_.param("map_blur", 5);
     pyramid_levels_ = nhp_.param("pyramid_levels", 1);
 
-    weight_scale_trans_ = rpg_common_ros::param<float>(nhp_, "weight_scale_translation", 0.);
-    weight_scale_rot_ = rpg_common_ros::param<float>(nhp_, "weight_scale_rotation", 0.);
-
     T_ = T_curr_inv_ = T_kf_ = T_wb_ = Eigen::Isometry3f::Identity();
     b_w_ << 0, 0, 0;
     b_a_ << 0, 0, 0;
@@ -271,7 +268,7 @@ void Tracker::updateMap()
 
     projectMap(); // 投影点云得到关键帧的关键点和雅克比(FCA)
 
-    if (keypoints_.size() < min_n_keypoints)
+    if (keypoints.size() < min_n_keypoints)
     {
         LOG(WARNING) << "Losing track!"; // 关键点数量不够, tracking失败!
     }
@@ -284,7 +281,7 @@ void Tracker::trackingThread()
     while (ros::ok())
     {
         r.sleep();
-        if (!idle_ && keypoints_.size() > 0)
+        if (!idle_ && keypoints.size() > 0)
         {
             estimateTrajectory();
         }
@@ -327,15 +324,15 @@ void Tracker::estimateTrajectory()
             continue;
         }
 
-        std::vector<sensor_msgs::Imu::ConstPtr> imu_vector = imu_cache_->getInterval(events_[cur_ev_].ts, events_[frame_end].ts);
-        Eigen::Matrix3f R_meas;
-        Eigen::Vector3f v_meas;
-        Eigen::Vector3f p_meas;
-        float t_meas;
-        Eigen::Matrix<float, 9, 9> Cov_meas;
-        std::tie(R_meas, v_meas, p_meas, t_meas, Cov_meas) = imuIntegrate(imu_vector);
-        // 导入两帧之间imu的更新量
-        importImuMeas(R_meas, v_meas, p_meas, t_meas, Cov_meas);
+        // std::vector<sensor_msgs::Imu::ConstPtr> imu_vector = imu_cache_->getInterval(events_[cur_ev_].ts, events_[frame_end].ts);
+        // Eigen::Matrix3f R_meas;
+        // Eigen::Vector3f v_meas;
+        // Eigen::Vector3f p_meas;
+        // float t_meas;
+        // Eigen::Matrix<float, 9, 9> Cov_meas;
+        // std::tie(R_meas, v_meas, p_meas, t_meas, Cov_meas) = imuIntegrate(imu_vector);
+        // // 导入两帧之间imu的更新量
+        // importImuMeas(R_meas, v_meas, p_meas, t_meas, Cov_meas);
 
         drawEvents(events_.begin() + cur_ev_, events_.begin() + frame_end, new_img_); // 把frame_size_个事件累积到new_img_
         cv::buildPyramid(new_img_, pyr_new_, pyramid_levels_);                        // 构建图像金字塔

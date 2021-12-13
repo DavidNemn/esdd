@@ -22,15 +22,14 @@ void LKSE3::projectMap()
     depthmap = cv::Mat(s, CV_32F, cv::Scalar(0.));
     cv::Mat img(s, CV_32F, cv::Scalar(0.));
 
-    n_visible_ = 0;
     size_t n_points = 0;
     // 先投影得到kf_img_
     for (const auto &P : map_->points)
     {
         Eigen::Vector3f p(P.x, P.y, P.z);
         p = T_kf_.inverse() * p;
-        p[0] = p[0] / p[2] * c_kf_.fx() + c_kf_.cx();
-        p[1] = p[1] / p[2] * c_kf_.fy() + c_kf_.cy();
+        p[0] = p[0] / p[2] * fx_ + cx_;
+        p[1] = p[1] / p[2] * fy_ + cy_;
         z_values.push_back(p[2]);
         ++n_points;
         if (p[0] < 0 || p[1] < 0)
@@ -49,7 +48,6 @@ void LKSE3::projectMap()
 
         img.at<float>(y, x) = 1.;
         map_local_->push_back(P);
-        ++n_visible_;
     }
 
     const int k = map_blur_;
@@ -57,10 +55,6 @@ void LKSE3::projectMap()
     cv::GaussianBlur(depthmap, depthmap, cv::Size(k, k), 0.);
     depthmap /= img;
     kf_img_ = img;
-
-    std::nth_element(z_values.begin(), z_values.begin() + z_values.size() / 2, z_values.end());
-    depth_median_ = z_values[z_values.size() / 2];
-    kf_visibility_ = static_cast<float>(n_visible_) / n_points;
 
     precomputereferenceFrame();
 }
@@ -77,16 +71,21 @@ void LKSE3::precomputereferenceFrame()
     grad_y = grad_y_img.ptr<float>(0); // y方向像素梯度
     int w = kf_img_.cols, h = kf_img_.rows;
 
-    keypoints_.clear();
-    // Vector9 vec = Vector9::Zero();
-    // Eigen::Map<const Vector9> vec9(&vec(0));
+    // 对于图像中梯度值大的点, 加入keypoints_
+    keypoints.clear();
+    pixel_values.clear();
+    J.clear();
+    JJt.clear();
+
+    Eigen::Matrix<float, 1, 2> J_grad;
+    Eigen::Matrix<float, 2, 3> J_proj;
+    Eigen::Matrix<float, 3, 6> J_SE3;
+
     Vector6 vec = Vector6::Zero();
-    Eigen::Map<const Vector6> vec9(&vec(0));
+    Eigen::Map<const Vector6> vec6(&vec(0));
 
     for (size_t y = 0; y != h; ++y)
     {
-        float v = ((float)y - c_kf_.cy()) / c_kf_.fy(); // 实际像素位置v
-
         for (size_t x = 0; x != w; ++x)
         {
             size_t offset = y * w + x;
@@ -96,26 +95,34 @@ void LKSE3::precomputereferenceFrame()
             if (pixel_value < .01)
                 continue;
 
-            float u = ((float)x - c_kf_.cx()) / c_kf_.fx(); // 实际像素位置u
+            float X = z * ((float)x - cx_) / fx_;
+            float Y = z * ((float)y - cy_) / fy_;
+            float Z_inv = 1.f / z, Z2_inv = 1.f / (z * z);
 
-            float gx = grad_x[offset] * c_kf_.fx(),
-                  gy = grad_y[offset] * c_kf_.fy(); // 梯度
+            J_grad(0, 0) = grad_x[offset];
+            J_grad(0, 1) = grad_y[offset];
 
-            // Vector9 v1, v2;
-            // v1 << -1. / z, 0., u / z, u * v, -(1. + u * u), v, 0, 0, 0;
-            // v2 << 0., -1. / z, v / z, 1 + v * v, -u * v, -u, 0, 0, 0;
-            Vector6 v1, v2;
-            v1 << -1. / z, 0., u / z, u * v, -(1. + u * u), v;
-            v2 << 0., -1. / z, v / z, 1 + v * v, -u * v, -u;
+            J_proj(0, 0) = fx_ * Z_inv;
+            J_proj(1, 0) = 0;
+            J_proj(0, 1) = 0;
+            J_proj(1, 1) = fy_ * Z_inv;
+            J_proj(0, 2) = -fx_ * X * Z2_inv;
+            J_proj(1, 2) = -fy_ * Y * Z2_inv;
 
-            vec = gx * v1 + gy * v2; // 雅克比矩阵为6维, J.J^T为6×6
+            Eigen::Matrix3f npHat;
+            npHat << 0, z, -Y, -z, 0, X, Y, -X, 0;
+            J_SE3 << Eigen::Matrix3f::Identity(3, 3), npHat;
 
-            // 根据上述结果构建Hessian矩阵, 作为属性放进keypoints_里
-            keypoints_.push_back(Keypoint(Eigen::Vector3f(u * z, v * z, z), pixel_value, vec, vec9 * vec9.transpose()));
-            // keypoints_.push_back(Keypoint(Eigen::Vector3f(u * z, v * z, z), pixel_value));
+            vec = -(J_grad * J_proj * J_SE3).transpose();
+
+            keypoints.push_back({X, Y, z});
+            pixel_values.push_back(pixel_value);
+            J.push_back(vec);
+            JJt.push_back(vec6 * vec6.transpose());
         }
     }
 }
+
 
 void LKSE3::updateTransformation(size_t pyr_lvl)
 {
@@ -129,39 +136,38 @@ void LKSE3::updateTransformation(size_t pyr_lvl)
           cx = cx_ / scale,
           cy = cy_ / scale;
     size_t w = img.cols, h = img.rows;
-    static Eigen::MatrixXf J_imu; // 预积分雅克比
-    Eigen::VectorXf r_imu;        // 预积分误差
-    Eigen::MatrixXf Z_imu;        // 协方差
-    J_imu.resize(9, 9);
-    init_Jacobian_imu(J_imu);
-    r_imu.resize(9);
-    Z_imu = Cov_meas_.inverse();
+    // static Eigen::MatrixXf J_imu; // 预积分雅克比
+    // Eigen::VectorXf r_imu;        // 预积分误差
+    // Eigen::MatrixXf Z_imu;        // 协方差
+    // J_imu.resize(9, 9);
+    // init_Jacobian_imu(J_imu);
+    // r_imu.resize(9);
+    // Z_imu = Cov_meas_.inverse();
     for (size_t iter = 0; iter != max_iterations_; ++iter)
     {
         H = Matrix6::Zero();
         b = Vector6::Zero();
         // H = Matrix9::Zero();
         // b = Vector9::Zero();
-        for (auto i = 0; i != keypoints_.size(); ++i)
+        for (size_t i = 0; i < keypoints.size(); i++)
         {
-            const Keypoint &k = keypoints_[i];
             // 关键帧像素位置投影到当前帧
-            Eigen::Vector3f p = T_curr_ * k.P;
+            Eigen::Vector3f p = T_curr_ * keypoints[i];
             float u = p[0] / p[2] * fx + cx,
                   v = p[1] / p[2] * fy + cy;
             // 当前帧与投影融合得到新像素
             float I_new = evo_utils::interpolate::bilinear(new_img, w, h, u, v); // 双线性插值
             if (I_new == -1.f)
                 continue;
-            float res = I_new - k.pixel_value; // 像素值偏差
+            float res = I_new - pixel_values[i]; // 像素值偏差
             if (res >= .95f)
                 continue;
             // b.noalias() += 1000 * k.J * res; // 雅克比矩阵
             // H.noalias() += 1000 * k.JJt;     // 海森矩阵
-            b.noalias() += k.J * res; // 雅克比矩阵
-            H.noalias() += k.JJt;     // 海森矩阵
+            b.noalias() += J[i] * res; // 雅克比矩阵
+            H.noalias() += JJt[i];     // 海森矩阵
         }
-        getError_imu(J_imu, r_imu);
+        // getError_imu(J_imu, r_imu);
         // b.noalias() += J_imu.transpose() * (Z_imu * r_imu);
         // H.noalias() += J_imu.transpose() * Z_imu * J_imu;
         dx = H.ldlt().solve(b * scale); // 核心位姿更新公式, Cholesky分解
@@ -248,22 +254,22 @@ void LKSE3::getError_imu(Eigen::MatrixXf &J_imu, Eigen::VectorXf &r_imu)
 
 void LKSE3::trackFrame()
 {
-    // T_curr_ = T_curr_inv_.inverse();
+    T_curr_ = T_curr_inv_.inverse();
     x_.setZero();
 
-    v_last_ = v_;
-    T_wb_last_ = T_wb_;
-    T_wb_.linear() = T_wb_last_.rotation() * R_meas_;
-    v_ = T_wb_last_.rotation() * v_meas_ + v_last_ + g_ * t_meas_;
-    T_wb_.translation() = T_wb_last_.rotation() * p_meas_ + T_wb_last_.translation() + v_last_ * t_meas_ + 0.5 * g_ * t_meas_ * t_meas_;
-    T_tmp_ = T_bc_inv_ * T_wb_ * T_bc_;
-    T_curr_ = T_tmp_.inverse() * T_kf_;
+    // v_last_ = v_;
+    // T_wb_last_ = T_wb_;
+    // T_wb_.linear() = T_wb_last_.rotation() * R_meas_;
+    // v_ = T_wb_last_.rotation() * v_meas_ + v_last_ + g_ * t_meas_;
+    // T_wb_.translation() = T_wb_last_.rotation() * p_meas_ + T_wb_last_.translation() + v_last_ * t_meas_ + 0.5 * g_ * t_meas_ * t_meas_;
+    // T_tmp_ = T_bc_inv_ * T_wb_ * T_bc_;
+    // T_curr_ = T_tmp_.inverse() * T_kf_;
 
     for (size_t lvl = pyramid_levels_; lvl != 0; --lvl)
         updateTransformation(lvl - 1);
     T_curr_inv_ *= SE3::exp(-x_).matrix();
     T_ = T_kf_ * T_curr_inv_; // 发布的就是T_, 所以不能放到updateTransformation里边
-    T_wb_ = T_bc_ * T_ * T_bc_inv_;
+    // T_wb_ = T_bc_ * T_ * T_bc_inv_;
 }
 
 void LKSE3::drawEvents(EventQueue::iterator ev_first, EventQueue::iterator ev_last, cv::Mat &out)
