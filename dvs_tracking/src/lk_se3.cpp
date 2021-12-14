@@ -123,7 +123,6 @@ void LKSE3::precomputereferenceFrame()
     }
 }
 
-
 void LKSE3::updateTransformation(size_t pyr_lvl)
 {
     static Eigen::MatrixXf H;
@@ -137,6 +136,54 @@ void LKSE3::updateTransformation(size_t pyr_lvl)
           cy = cy_ / scale;
     size_t w = img.cols, h = img.rows;
 
+    for (size_t iter = 0; iter != max_iterations_; ++iter)
+    {
+        H = Matrix6::Zero();
+        b = Vector6::Zero();
+        for (size_t i = 0; i < keypoints.size(); i++)
+        {
+            // 关键帧像素位置投影到当前帧
+            Eigen::Vector3f p = T_curr_update_ * keypoints[i];
+            float u = p[0] / p[2] * fx + cx,
+                  v = p[1] / p[2] * fy + cy;
+            // 当前帧与投影融合得到新像素
+            float I_new = evo_utils::interpolate::bilinear(new_img, w, h, u, v); // 双线性插值
+            if (I_new == -1.f)
+                continue;
+            float res = I_new - pixel_values[i]; // 像素值偏差
+            if (res >= .95f)
+                continue;
+            b.noalias() += J[i] * res; // 雅克比矩阵
+            H.noalias() += JJt[i];     // 海森矩阵
+        }
+        dx = H.ldlt().solve(b * scale); // 核心位姿更新公式, Cholesky分解
+        if ((bool)std::isnan((float)dx[0]))
+        {
+            LOG(WARNING) << "Matrix close to singular!";
+            return;
+        }
+        updateStateViariant(dx);
+    }
+}
+
+void LKSE3::updateStateViariant(Eigen::VectorXf &dx)
+{
+    T_curr_update_ *= SE3::exp(dx).matrix();
+    x_ += dx;
+}
+
+void LKSE3::updateTransformationImu(size_t pyr_lvl)
+{
+    static Eigen::MatrixXf H;
+    static Eigen::VectorXf b, dx;
+    const cv::Mat &img = pyr_new_[pyr_lvl];
+    const float *new_img = img.ptr<float>(0);
+    float scale = std::pow(2.f, (float)pyr_lvl);
+    float fx = fx_ / scale,
+          fy = fy_ / scale,
+          cx = cx_ / scale,
+          cy = cy_ / scale;
+    size_t w = img.cols, h = img.rows;
 
     static Eigen::MatrixXf J_imu; // 预积分雅克比
     Eigen::VectorXf r_imu;        // 预积分误差
@@ -196,12 +243,6 @@ void LKSE3::init_Jacobian_imu(Eigen::MatrixXf &J_imu)
     J_imu.block<3, 3>(3, 6) = R_i.transpose();
 }
 
-void LKSE3::updateStateViariant(Eigen::VectorXf &dx)
-{
-    T_curr_update_ *= SE3::exp(dx).matrix();
-    x_ += dx;
-}
-
 void LKSE3::updateStateViariantImu(Eigen::VectorXf &dx)
 {
     const Eigen::Vector3f delta_phi = dx.segment<3>(0);
@@ -246,6 +287,21 @@ void LKSE3::trackFrame()
     T_curr_update_ = T_curr_;
     x_.setZero();
 
+    for (size_t lvl = pyramid_levels_; lvl != 0; --lvl)
+        updateTransformation(lvl - 1);
+
+    T_curr_inv_ *= SE3::exp(-x_).matrix();
+    T_curr_ = T_curr_update_;
+    T_ = T_kf_ * T_curr_inv_;
+    T_wb_ = T_bc_ * T_ * T_bc_inv_;
+}
+
+void LKSE3::trackFrameImu()
+{
+    T_curr_ = T_curr_inv_.inverse();
+    T_curr_update_ = T_curr_;
+    x_.setZero();
+
     // v_last_ = v_;
     // T_wb_last_ = T_wb_;
     // T_wb_.linear() = T_wb_last_.rotation() * R_meas_;
@@ -254,10 +310,8 @@ void LKSE3::trackFrame()
     // T_tmp_ = T_bc_inv_ * T_wb_ * T_bc_;
     // T_curr_ = T_tmp_.inverse() * T_kf_;
 
-
-
     for (size_t lvl = pyramid_levels_; lvl != 0; --lvl)
-        updateTransformation(lvl - 1);
+        updateTransformationImu(lvl - 1);
 
     T_curr_inv_ *= SE3::exp(-x_).matrix();
     T_curr_ = T_curr_update_;

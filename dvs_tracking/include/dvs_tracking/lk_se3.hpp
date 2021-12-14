@@ -42,8 +42,8 @@ protected:
     PointCloud::Ptr map_;       // 基于关键帧构建的地图
     PointCloud::Ptr map_local_; // 在当前帧可视的局部地图
 
-    // Eigen::MatrixXf J_cam;                // 雅克比
     Eigen::VectorXf x_ = Vector6::Zero(); // T_curr_inv_的李代数表示
+    // Eigen::VectorXf x_ = Vector9::Zero(); // T_wb_的李代数表示
 
     cv::Mat depth_kf_;              // 关键帧的深度图
     cv::Mat kf_img_;                // 关键帧
@@ -94,7 +94,9 @@ protected:
     void precomputereferenceFrame();                                                            // 计算关键帧的关键点
     void computecurrentFrame();                                                                 // 计算当前帧的雅克比
     void trackFrame();                                                                          // tracking函数
+    void trackFrameImu();                                                                       // tracking函数
     void updateTransformation(size_t pyr_lvl);                                                  // tracking子函数
+    void updateTransformationImu(size_t pyr_lvl);                                               // tracking子函数
     void drawEvents(EventQueue::iterator ev_first, EventQueue::iterator ev_last, cv::Mat &out); // 把ev_first到ev_last的事件累积到out
 
     void updateStateViariant(Eigen::VectorXf &dx);

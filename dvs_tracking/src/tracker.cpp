@@ -336,7 +336,9 @@ void Tracker::estimateTrajectory()
 
         drawEvents(events_.begin() + cur_ev_, events_.begin() + frame_end, new_img_); // 把frame_size_个事件累积到new_img_
         cv::buildPyramid(new_img_, pyr_new_, pyramid_levels_);                        // 构建图像金字塔
-        trackFrame();                                                                 // 进行tracking
+
+        trackFrame();    // vo
+        // trackFrameImu(); // vio
 
         publishTF();           // 发布tf
         cur_ev_ += step_size_; // 跳过step_size_个事件
