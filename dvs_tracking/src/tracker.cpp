@@ -324,15 +324,15 @@ void Tracker::estimateTrajectory()
             continue;
         }
 
-        // std::vector<sensor_msgs::Imu::ConstPtr> imu_vector = imu_cache_->getInterval(events_[cur_ev_].ts, events_[frame_end].ts);
-        // Eigen::Matrix3f R_meas;
-        // Eigen::Vector3f v_meas;
-        // Eigen::Vector3f p_meas;
-        // float t_meas;
-        // Eigen::Matrix<float, 9, 9> Cov_meas;
-        // std::tie(R_meas, v_meas, p_meas, t_meas, Cov_meas) = imuIntegrate(imu_vector);
-        // // 导入两帧之间imu的更新量
-        // importImuMeas(R_meas, v_meas, p_meas, t_meas, Cov_meas);
+        std::vector<sensor_msgs::Imu::ConstPtr> imu_vector = imu_cache_->getInterval(events_[cur_ev_].ts, events_[frame_end].ts);
+        Eigen::Matrix3f R_meas;
+        Eigen::Vector3f v_meas;
+        Eigen::Vector3f p_meas;
+        float t_meas;
+        Eigen::Matrix<float, 9, 9> Cov_meas;
+        std::tie(R_meas, v_meas, p_meas, t_meas, Cov_meas) = imuIntegrate(imu_vector);
+        // 导入两帧之间imu的更新量
+        importImuMeas(R_meas, v_meas, p_meas, t_meas, Cov_meas);
 
         drawEvents(events_.begin() + cur_ev_, events_.begin() + frame_end, new_img_); // 把frame_size_个事件累积到new_img_
         cv::buildPyramid(new_img_, pyr_new_, pyramid_levels_);                        // 构建图像金字塔

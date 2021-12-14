@@ -136,13 +136,13 @@ void LKSE3::updateTransformation(size_t pyr_lvl)
           cx = cx_ / scale,
           cy = cy_ / scale;
     size_t w = img.cols, h = img.rows;
-    // static Eigen::MatrixXf J_imu; // 预积分雅克比
-    // Eigen::VectorXf r_imu;        // 预积分误差
-    // Eigen::MatrixXf Z_imu;        // 协方差
-    // J_imu.resize(9, 9);
-    // init_Jacobian_imu(J_imu);
-    // r_imu.resize(9);
-    // Z_imu = Cov_meas_.inverse();
+    static Eigen::MatrixXf J_imu; // 预积分雅克比
+    Eigen::VectorXf r_imu;        // 预积分误差
+    Eigen::MatrixXf Z_imu;        // 协方差
+    J_imu.resize(9, 9);
+    init_Jacobian_imu(J_imu);
+    r_imu.resize(9);
+    Z_imu = Cov_meas_.inverse();
     for (size_t iter = 0; iter != max_iterations_; ++iter)
     {
         H = Matrix6::Zero();
