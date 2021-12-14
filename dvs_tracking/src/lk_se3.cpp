@@ -136,6 +136,8 @@ void LKSE3::updateTransformation(size_t pyr_lvl)
           cx = cx_ / scale,
           cy = cy_ / scale;
     size_t w = img.cols, h = img.rows;
+
+
     static Eigen::MatrixXf J_imu; // 预积分雅克比
     Eigen::VectorXf r_imu;        // 预积分误差
     Eigen::MatrixXf Z_imu;        // 协方差
@@ -143,6 +145,7 @@ void LKSE3::updateTransformation(size_t pyr_lvl)
     init_Jacobian_imu(J_imu);
     r_imu.resize(9);
     Z_imu = Cov_meas_.inverse();
+
     for (size_t iter = 0; iter != max_iterations_; ++iter)
     {
         H = Matrix6::Zero();
@@ -152,7 +155,7 @@ void LKSE3::updateTransformation(size_t pyr_lvl)
         for (size_t i = 0; i < keypoints.size(); i++)
         {
             // 关键帧像素位置投影到当前帧
-            Eigen::Vector3f p = T_curr_ * keypoints[i];
+            Eigen::Vector3f p = T_curr_update_ * keypoints[i];
             float u = p[0] / p[2] * fx + cx,
                   v = p[1] / p[2] * fy + cy;
             // 当前帧与投影融合得到新像素
@@ -195,23 +198,8 @@ void LKSE3::init_Jacobian_imu(Eigen::MatrixXf &J_imu)
 
 void LKSE3::updateStateViariant(Eigen::VectorXf &dx)
 {
-    T_curr_ *= SE3::exp(dx).matrix();
-    // 这样更新不大行:
-    // const Eigen::Vector3f delta_phi = dx.segment<3>(0);
-    // const Eigen::Matrix3f R_delta = evo_utils::math::exp_SO3(delta_phi);
-    // const Eigen::Vector3f t_delta = dx.segment<3>(3);
-    // T_curr_.linear() = T_curr_.rotation() * R_delta;
-    // T_curr_.translation() += t_delta;
+    T_curr_update_ *= SE3::exp(dx).matrix();
     x_ += dx;
-    // const Eigen::Vector3f delta_phi = dx.segment<3>(0);
-    // const Eigen::Matrix3f R_delta = evo_utils::math::exp_SO3(delta_phi);
-    // const Eigen::Vector3f t_delta = dx.segment<3>(3);
-
-    // // update T_wb and v
-    // T_wb_.linear() = T_wb_.rotation() * R_delta;
-    // T_wb_.translation() += t_delta;
-
-    // x_ += dx;
 }
 
 void LKSE3::updateStateViariantImu(Eigen::VectorXf &dx)
@@ -255,6 +243,7 @@ void LKSE3::getError_imu(Eigen::MatrixXf &J_imu, Eigen::VectorXf &r_imu)
 void LKSE3::trackFrame()
 {
     T_curr_ = T_curr_inv_.inverse();
+    T_curr_update_ = T_curr_;
     x_.setZero();
 
     // v_last_ = v_;
@@ -265,11 +254,16 @@ void LKSE3::trackFrame()
     // T_tmp_ = T_bc_inv_ * T_wb_ * T_bc_;
     // T_curr_ = T_tmp_.inverse() * T_kf_;
 
+
+
     for (size_t lvl = pyramid_levels_; lvl != 0; --lvl)
         updateTransformation(lvl - 1);
+
     T_curr_inv_ *= SE3::exp(-x_).matrix();
-    T_ = T_kf_ * T_curr_inv_; // 发布的就是T_, 所以不能放到updateTransformation里边
-    // T_wb_ = T_bc_ * T_ * T_bc_inv_;
+    T_curr_ = T_curr_update_;
+    // T_curr_inv_ = T_curr_.inverse();
+    T_ = T_kf_ * T_curr_inv_;
+    T_wb_ = T_bc_ * T_ * T_bc_inv_;
 }
 
 void LKSE3::drawEvents(EventQueue::iterator ev_first, EventQueue::iterator ev_last, cv::Mat &out)

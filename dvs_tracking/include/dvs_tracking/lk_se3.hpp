@@ -73,6 +73,11 @@ protected:
     Eigen::Isometry3f T_bc_;       // 相机系->机体系
     Eigen::Isometry3f T_bc_inv_;   // 机体系->相机系
 
+    Eigen::Isometry3f T_wb_update_;   // 机体系->世界坐标系更新量
+    Eigen::Isometry3f v_update_;      // 速度(机体系下)
+    Eigen::Isometry3f T_update_;      // 当前帧->世界坐标系更新量
+    Eigen::Isometry3f T_curr_update_; // 关键帧->当前帧更新量
+
     Eigen::Vector3f v_last_; // 上一时刻速度(机体系下)
     Eigen::Vector3f v_;      // 速度(机体系下)
     Eigen::Vector3f b_w_;    // 陀螺仪偏置
@@ -85,13 +90,13 @@ protected:
     float t_meas_;
     Eigen::Matrix<float, 9, 9> Cov_meas_;
 
-    void projectMap();                         // 投影3D点云到关键帧
-    void precomputereferenceFrame();           // 计算关键帧的关键点
-    void computecurrentFrame();                // 计算当前帧的雅克比
-    void trackFrame();                         // tracking函数
-    void updateTransformation(size_t pyr_lvl); // tracking子函数
+    void projectMap();                                                                          // 投影3D点云到关键帧
+    void precomputereferenceFrame();                                                            // 计算关键帧的关键点
+    void computecurrentFrame();                                                                 // 计算当前帧的雅克比
+    void trackFrame();                                                                          // tracking函数
+    void updateTransformation(size_t pyr_lvl);                                                  // tracking子函数
     void drawEvents(EventQueue::iterator ev_first, EventQueue::iterator ev_last, cv::Mat &out); // 把ev_first到ev_last的事件累积到out
-    
+
     void updateStateViariant(Eigen::VectorXf &dx);
     void updateStateViariantImu(Eigen::VectorXf &dx);
     void init_Jacobian_imu(Eigen::MatrixXf &J_imu);
